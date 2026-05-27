@@ -11,23 +11,30 @@ struct ContentView: View {
     @State private var pendingCategory = ""
 
     var body: some View {
-        ZStack {
-            Color.playerBackground.ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack {
+                Color.playerBackground.ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                header
+                VStack(spacing: 24) {
+                    header
 
-                if let recording = library.selectedRecording {
-                    playerContent(recording)
-                } else {
-                    emptyState
+                    if let recording = library.selectedRecording {
+                        playerContent(
+                            recording,
+                            subtitlePanelHeight: subtitlePanelHeight(for: geometry.size.height)
+                        )
+                    } else {
+                        emptyState
+                    }
+
+                    Spacer(minLength: 12)
+                    bottomBar
                 }
-
-                Spacer(minLength: 12)
-                bottomBar
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
+                .frame(maxWidth: 430, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
         }
         .foregroundStyle(.white)
         .fileImporter(
@@ -93,11 +100,11 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
-    private func playerContent(_ recording: Recording) -> some View {
+    private func playerContent(_ recording: Recording, subtitlePanelHeight: CGFloat) -> some View {
         VStack(spacing: 24) {
             SubtitlePanel(recording: recording, errorMessage: library.errorMessage)
                 .frame(maxWidth: .infinity)
-                .frame(height: 330)
+                .frame(height: subtitlePanelHeight)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 14) {
@@ -253,6 +260,10 @@ struct ContentView: View {
         .font(.title2.weight(.semibold))
         .buttonStyle(.plain)
         .foregroundStyle(.white.opacity(0.82))
+    }
+
+    private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
+        min(max(availableHeight * 0.42, 260), 430)
     }
 }
 

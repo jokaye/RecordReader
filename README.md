@@ -8,7 +8,7 @@ RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选
 - 中文界面。
 - 仅做中文语音转字幕，固定使用 `zh_CN`。
 - 选择录音文件夹。
-- 扫描常见音频文件：`aac`, `aif`, `aiff`, `caf`, `flac`, `m4a`, `mp3`, `wav`。
+- 扫描 iOS/AVFoundation 常见录音音频文件：`3g2`, `3gp`, `3gp2`, `3gpp`, `aac`, `aif`, `aiff`, `aifc`, `amr`, `caf`, `flac`, `m4a`, `mp3`, `wav`。
 - 无封面图的深色播放器界面。
 - 收藏录音。
 - 设置分类，并按全部/收藏/分类筛选。

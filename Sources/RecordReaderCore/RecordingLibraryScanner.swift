@@ -20,11 +20,28 @@ public struct RecordingLibraryScanner {
 
     public init(
         fileManager: FileManager = .default,
-        supportedExtensions: Set<String> = ["aac", "aif", "aiff", "caf", "flac", "m4a", "mp3", "wav"]
+        supportedExtensions: Set<String> = Self.defaultSupportedExtensions
     ) {
         self.fileManager = fileManager
         self.supportedExtensions = supportedExtensions
     }
+
+    public static let defaultSupportedExtensions: Set<String> = [
+        "aac",
+        "aif",
+        "aiff",
+        "aifc",
+        "amr",
+        "caf",
+        "flac",
+        "m4a",
+        "mp3",
+        "wav",
+        "3g2",
+        "3gp",
+        "3gp2",
+        "3gpp"
+    ]
 
     public func scan(folder: URL, metadata: RecordingLibraryMetadata) throws -> [Recording] {
         let folderPath = folder.path
