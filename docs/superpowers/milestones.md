@@ -196,3 +196,29 @@ Continuation:
 
 - To run cloud compile, add a GitHub remote and authenticate `gh`, then push and trigger `.github/workflows/ios.yml`.
 - If a remote is added later, run `gh workflow run iOS` or push to `main`, then record the workflow result under `M8: Cloud Verification`.
+
+### 2026-05-27 M8: Cloud Verification
+
+Status: first cloud compile passed.
+
+Remote:
+
+- `origin`: `git@github.com:jokaye/RecordReader.git`
+- Commit: `9d210f0 first commit`
+- Workflow run: `iOS #1`
+
+GitHub result:
+
+- Trigger: push to `main`.
+- Status: Success.
+- Duration: 1m 37s.
+- Job: `build`.
+
+Warning:
+
+- GitHub reported `actions/checkout@v4` uses Node.js 20 and should move to a newer runtime before GitHub's Node 20 deprecation takes effect.
+
+Follow-up:
+
+- Updated `.github/workflows/ios.yml` to use `actions/checkout@v5`, which supports Node.js 24.
+- Push the workflow-only update and verify the second cloud run.
