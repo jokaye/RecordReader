@@ -218,7 +218,11 @@ Warning:
 
 - GitHub reported `actions/checkout@v4` uses Node.js 20 and should move to a newer runtime before GitHub's Node 20 deprecation takes effect.
 
-Follow-up:
+Follow-up result:
 
 - Updated `.github/workflows/ios.yml` to use `actions/checkout@v5`, which supports Node.js 24.
-- Push the workflow-only update and verify the second cloud run.
+- Commit: `628cb1c ci: use node 24 checkout action`
+- Workflow run: `iOS #2`
+- Status: Success.
+- Duration: 1m 19s.
+- The Node.js 20 checkout warning did not appear on the second run.
