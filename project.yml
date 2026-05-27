@@ -1,0 +1,31 @@
+name: RecordReader
+options:
+  bundleIdPrefix: com.recordreader
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  MARKETING_VERSION: "0.1.0"
+  CURRENT_PROJECT_VERSION: "1"
+packages:
+  RecordReader:
+    path: .
+targets:
+  RecordReader:
+    type: application
+    platform: iOS
+    sources:
+      - App/RecordReader
+    dependencies:
+      - package: RecordReader
+        product: RecordReaderCore
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      SWIFT_VERSION: "5.9"
+      PRODUCT_BUNDLE_IDENTIFIER: com.recordreader.app
+      INFOPLIST_KEY_CFBundleDisplayName: RecordReader
+      INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: RecordReader 使用 iOS 中文语音识别为你选择的录音生成字幕。
+      INFOPLIST_KEY_NSMicrophoneUsageDescription: 语音识别框架可能需要麦克风权限来准备中文识别。
+      INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: true
+      INFOPLIST_KEY_UIFileSharingEnabled: true
+    scheme:
+      testTargets: []

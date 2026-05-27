@@ -1,0 +1,198 @@
+# RecordReader Milestones
+
+## Checkpoint Log
+
+### 2026-05-27 M0: Repository Baseline
+
+Status: complete.
+
+Evidence:
+
+- Current workspace: `/Users/bytedance/Documents/RecordReader`.
+- Repository was empty except `.git`.
+- Branch state: `main` with no commits.
+- Local Xcode is not installed; `xcodebuild -version` reports that the active developer directory is Command Line Tools.
+
+Continuation:
+
+- Treat this as a greenfield SwiftUI app. There is no previous app code to preserve.
+
+### 2026-05-27 M1: Product Boundary and Design
+
+Status: complete.
+
+Output:
+
+- `docs/superpowers/specs/2026-05-27-record-reader-design.md`
+
+Decision:
+
+- v1 is a lightweight local-first iPhone recording player.
+- v1 uses Chinese UI copy.
+- v1 uses iOS Speech framework with fixed `zh_CN` recognition for subtitle state and segment generation.
+- SmartSub integration, Whisper.cpp/Core ML model management, translation, batch processing, desktop support, iPad-specific layout, and subtitle export are out of scope.
+- The provided reference image informs dark player styling, but v1 does not use cover art.
+
+Continuation:
+
+- Preserve the player-first UI. Do not convert the first screen into a generic file manager.
+- Preserve the Chinese-only, iPhone-only, lightweight scope unless the user explicitly expands it.
+
+### 2026-05-27 M2: Implementation Plan
+
+Status: complete.
+
+Output:
+
+- `docs/superpowers/plans/2026-05-27-record-reader.md`
+
+Continuation:
+
+- Use the plan's file map to continue. The remaining external gate is cloud build verification.
+
+### 2026-05-27 M3: Core Package
+
+Status: implemented, local compile blocked by environment.
+
+Output:
+
+- `Package.swift`
+- `Sources/RecordReaderCore/Recording.swift`
+- `Sources/RecordReaderCore/RecordingLibraryMetadata.swift`
+- `Sources/RecordReaderCore/RecordingLibraryScanner.swift`
+- `Sources/RecordReaderCore/RecordingMetadataStore.swift`
+- `Tests/RecordReaderCoreTests/RecordingLibraryScannerTests.swift`
+- `Tests/RecordReaderCoreTests/RecordingMetadataStoreTests.swift`
+
+Validation attempted:
+
+```bash
+swift test
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk swift test
+```
+
+Observed result:
+
+Both commands fail before compiling project code:
+
+```text
+xcrun: error: unable to lookup item 'PlatformPath' from command line tools installation
+```
+
+Continuation:
+
+- Re-run `swift test` in GitHub Actions or on a Mac with full Xcode selected.
+
+### 2026-05-27 M4: SwiftUI App Shell
+
+Status: implemented, cloud build pending.
+
+Output:
+
+- `App/RecordReader/RecordReaderApp.swift`
+- `App/RecordReader/ContentView.swift`
+- `App/RecordReader/RecordingLibrarySheet.swift`
+- `App/RecordReader/SubtitlePanel.swift`
+- `App/RecordReader/AudioLibraryViewModel.swift`
+- `App/RecordReader/PlayerController.swift`
+- `App/RecordReader/SpeechTranscriber.swift`
+
+Implemented behavior:
+
+- Folder picker.
+- Recording list sheet.
+- All/favorites/category filters.
+- Player-first dark UI.
+- Favorite toggle.
+- Category editor.
+- Playback control.
+- Subtitle recognition action and status display.
+
+Continuation:
+
+- First run should be through CI because the local machine cannot build iOS targets.
+
+### 2026-05-27 M5: Cloud Build Setup
+
+Status: implemented, remote execution pending.
+
+Output:
+
+- `project.yml`
+- `.github/workflows/ios.yml`
+- `.gitignore`
+
+Workflow:
+
+1. Select full Xcode.
+2. Install XcodeGen.
+3. Run `swift test`.
+4. Generate `RecordReader.xcodeproj`.
+5. Run simulator `xcodebuild` with signing disabled.
+
+Local validation:
+
+- Installed XcodeGen with `brew install xcodegen`.
+- `xcodegen generate` succeeded and created `RecordReader.xcodeproj`.
+- Local `xcodebuild` still fails before project compilation because the machine only has Command Line Tools selected, not full Xcode.
+
+Continuation:
+
+- Push to GitHub or trigger Actions manually.
+- If CI fails, update this file with the failing step, exact error, and fix.
+
+## Next Checkpoint
+
+Run the GitHub Actions workflow and record the result under a new `M7: Cloud Verification` section.
+
+### 2026-05-27 M6: Lightweight Chinese Scope Tightening
+
+Status: implemented, cloud build pending.
+
+User direction:
+
+- Continue with the lightest phone-only approach.
+- Do not require SmartSub's subtitle recognition architecture.
+- Chinese support is enough.
+
+Changes:
+
+- UI strings changed to Chinese.
+- Speech recognition now only creates `SFSpeechRecognizer(locale: Locale(identifier: "zh_CN"))`.
+- Removed fallback to the system default speech recognizer.
+- Permission strings and docs now describe Chinese-only iPhone scope.
+
+Continuation:
+
+- Keep the app lightweight. Do not add SmartSub, Whisper, translation, server APIs, or desktop targets unless the user explicitly changes scope.
+
+### 2026-05-27 M7: Compile Attempt
+
+Status: blocked by environment for full iOS build; local generation and syntax checks passed.
+
+Commands run:
+
+```bash
+xcodegen generate
+xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+gh auth status
+swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift
+swiftc -parse App/RecordReader/*.swift
+git diff --check
+ruby -e 'require "yaml"; YAML.load_file("project.yml"); YAML.load_file(".github/workflows/ios.yml"); puts "yaml ok"'
+```
+
+Results:
+
+- `xcodegen generate` succeeded and created `RecordReader.xcodeproj`.
+- `swiftc -parse` succeeded for Core, Tests, and App Swift files.
+- `git diff --check` succeeded.
+- YAML parsing succeeded.
+- `xcodebuild` failed before project compilation because this machine only has Command Line Tools selected, not full Xcode.
+- `gh auth status` reports no GitHub login.
+- `git remote -v` has no configured remote.
+
+Continuation:
+
+- To run cloud compile, add a GitHub remote and authenticate `gh`, then push and trigger `.github/workflows/ios.yml`.
+- If a remote is added later, run `gh workflow run iOS` or push to `main`, then record the workflow result under `M8: Cloud Verification`.
