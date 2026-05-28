@@ -255,3 +255,7 @@ Cloud result:
 - Commit `e55e1d4` failed in `swift test`.
 - Cause: the new direct-file test asserted a specific Chinese localized sort order. CI returned the same recordings in a different valid localized order.
 - Fix: assert direct-file import by sets for titles/extensions, keeping the test focused on MP3/iOS recording support instead of locale-specific sorting.
+- Commit `f260adb` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26559368718`
+- Duration: 1m 16s.
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7259423123`, digest `sha256:4507bb43626235323e3e20488af6427157854772e076c2d2f558ee1e7f016b30`.
