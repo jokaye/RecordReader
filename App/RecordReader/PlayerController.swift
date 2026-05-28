@@ -41,7 +41,10 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             try AVAudioSession.sharedInstance().setActive(true)
             let nextPlayer = try AVAudioPlayer(contentsOf: url)
             nextPlayer.delegate = self
-            nextPlayer.prepareToPlay()
+            nextPlayer.volume = 1.0
+            guard nextPlayer.prepareToPlay(), nextPlayer.duration.isFinite, nextPlayer.duration > 0 else {
+                throw PlayerControllerError.unplayableAudio
+            }
             player = nextPlayer
             currentTime = 0
             duration = nextPlayer.duration
@@ -76,7 +79,13 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             errorMessage = "请先选择一段录音再播放。"
             return
         }
-        player.play()
+        guard player.play() else {
+            isPlaying = false
+            stopTimer()
+            errorMessage = "无法开始播放这段录音。请确认文件仍可访问，并检查手机音量或重新导入。"
+            return
+        }
+        errorMessage = nil
         isPlaying = true
         startTimer()
     }
@@ -141,5 +150,13 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
         }
         let totalSeconds = max(0, Int(value.rounded()))
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
+private enum PlayerControllerError: Error, LocalizedError {
+    case unplayableAudio
+
+    var errorDescription: String? {
+        "这段录音无法准备播放。请确认文件是有效音频，并重新从文件夹或音频文件导入。"
     }
 }

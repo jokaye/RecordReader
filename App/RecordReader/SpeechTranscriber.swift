@@ -8,6 +8,8 @@ final class SpeechTranscriber {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var timeoutWorkItem: DispatchWorkItem?
     private var currentCompletionID = UUID()
+    private var scopedURL: URL?
+    private var hasSecurityScope = false
 
     func transcribe(
         url: URL,
@@ -15,10 +17,14 @@ final class SpeechTranscriber {
     ) {
         recognitionTask?.cancel()
         timeoutWorkItem?.cancel()
+        releaseSecurityScope()
         currentCompletionID = UUID()
         let completionID = currentCompletionID
+        scopedURL = url
+        hasSecurityScope = url.startAccessingSecurityScopedResource()
 
         guard FileManager.default.isReadableFile(atPath: url.path) else {
+            releaseSecurityScope()
             completion(.failure(SpeechTranscriberError.audioFileUnreadable))
             return
         }
@@ -28,12 +34,16 @@ final class SpeechTranscriber {
             case .authorized:
                 self?.startRecognition(url: url, completionID: completionID, completion: completion)
             case .denied:
+                self?.releaseSecurityScope()
                 completion(.failure(SpeechTranscriberError.permissionDenied))
             case .restricted:
+                self?.releaseSecurityScope()
                 completion(.failure(SpeechTranscriberError.permissionRestricted))
             case .notDetermined:
+                self?.releaseSecurityScope()
                 completion(.failure(SpeechTranscriberError.permissionNotDetermined))
             @unknown default:
+                self?.releaseSecurityScope()
                 completion(.failure(SpeechTranscriberError.unknownAuthorizationStatus))
             }
         }
@@ -73,14 +83,18 @@ final class SpeechTranscriber {
             guard let result, result.isFinal else {
                 return
             }
-            let segments = result.bestTranscription.segments.map { segment in
+            let formattedString = result.bestTranscription.formattedString
+            var segments = result.bestTranscription.segments.map { segment in
                 SubtitleSegment(
                     startTime: segment.timestamp,
                     endTime: segment.timestamp + segment.duration,
                     text: segment.substring
                 )
             }
-            guard !segments.isEmpty || !result.bestTranscription.formattedString.isEmpty else {
+            if segments.isEmpty, !formattedString.isEmpty {
+                segments = [SubtitleSegment(startTime: 0, endTime: 0, text: formattedString)]
+            }
+            guard !segments.isEmpty else {
                 self.finish(completionID: completionID, result: .failure(SpeechTranscriberError.noSpeechDetected), completion: completion)
                 return
             }
@@ -119,7 +133,16 @@ final class SpeechTranscriber {
         timeoutWorkItem = nil
         recognitionTask = nil
         currentCompletionID = UUID()
+        releaseSecurityScope()
         completion(result)
+    }
+
+    private func releaseSecurityScope() {
+        if hasSecurityScope {
+            scopedURL?.stopAccessingSecurityScopedResource()
+            hasSecurityScope = false
+        }
+        scopedURL = nil
     }
 }
 
