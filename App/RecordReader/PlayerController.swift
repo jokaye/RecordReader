@@ -80,6 +80,15 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
         currentTime = player.currentTime
     }
 
+    func seek(toProgress progress: Double) {
+        guard let player, player.duration > 0 else {
+            return
+        }
+        let clampedProgress = min(max(progress, 0), 1)
+        player.currentTime = player.duration * clampedProgress
+        currentTime = player.currentTime
+    }
+
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         let finishedDuration = player.duration
         Task { @MainActor in

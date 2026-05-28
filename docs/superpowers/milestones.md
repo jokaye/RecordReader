@@ -259,3 +259,24 @@ Cloud result:
 - Run: `https://github.com/jokaye/RecordReader/actions/runs/26559368718`
 - Duration: 1m 16s.
 - Artifact: `RecordReader-unsigned-ipa`, artifact id `7259423123`, digest `sha256:4507bb43626235323e3e20488af6427157854772e076c2d2f558ee1e7f016b30`.
+
+### 2026-05-28 M10: Device Validation, Seek, and Speech Failure Detail
+
+Status: implemented locally; cloud verification pending.
+
+User direction:
+
+- Implement true-device usability validation.
+- Add draggable seek on the playback progress bar.
+- Make subtitle recognition failure messages more specific.
+- The app must recognize subtitles itself; users should not have to provide subtitle files.
+
+Changes:
+
+- Replaced read-only playback progress with a draggable `Slider`.
+- Added `PlayerController.seek(toProgress:)`.
+- `SpeechTranscriber` now validates file readability before recognition.
+- Speech authorization failures now distinguish denied, restricted, not determined, and unknown states.
+- Recognition failures now distinguish unavailable recognizer, no speech detected, timeout, and system recognition errors.
+- Speech requests use `.dictation` hint and punctuation when available.
+- Added `docs/device-validation.md` with iPhone validation steps for MP3, iOS recordings, playback seek, and app-generated Chinese subtitles.

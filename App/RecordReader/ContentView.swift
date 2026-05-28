@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var isLibraryPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
+    @State private var seekDraftProgress: Double?
 
     var body: some View {
         GeometryReader { geometry in
@@ -145,9 +146,18 @@ struct ContentView: View {
                     .accessibilityLabel("更多操作")
                 }
 
-                ProgressView(value: player.progress)
-                    .tint(.white)
-                    .background(.white.opacity(0.18))
+                Slider(
+                    value: seekProgressBinding,
+                    in: 0...1,
+                    onEditingChanged: { isEditing in
+                        if !isEditing {
+                            player.seek(toProgress: seekDraftProgress ?? player.progress)
+                            seekDraftProgress = nil
+                        }
+                    }
+                )
+                .tint(.white)
+                .accessibilityLabel("播放进度")
 
                 HStack {
                     Text(player.currentTimeLabel)
@@ -264,6 +274,17 @@ struct ContentView: View {
 
     private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
         min(max(availableHeight * 0.42, 260), 430)
+    }
+
+    private var seekProgressBinding: Binding<Double> {
+        Binding(
+            get: {
+                seekDraftProgress ?? player.progress
+            },
+            set: { newValue in
+                seekDraftProgress = newValue
+            }
+        )
     }
 }
 

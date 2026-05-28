@@ -48,3 +48,5 @@ xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'ge
 ## 继续开发
 
 从 `docs/superpowers/milestones.md` 开始。它记录已完成 milestone、本地环境阻塞和下一步云端验证 checkpoint。
+
+真机验证步骤见 `docs/device-validation.md`。字幕由 App 通过 iOS Speech 自己识别生成，不需要用户提供字幕文件。
