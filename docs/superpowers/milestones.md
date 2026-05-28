@@ -226,3 +226,26 @@ Follow-up result:
 - Status: Success.
 - Duration: 1m 19s.
 - The Node.js 20 checkout warning did not appear on the second run.
+
+### 2026-05-28 M9: Direct Audio Import Review
+
+Status: implemented locally; cloud verification pending.
+
+User report:
+
+- Another IDE completed most UI and feature work.
+- iOS recordings and MP3 files still appeared unsupported.
+- Subtitle recognition support needed review.
+
+Findings:
+
+- Scanner support for MP3 and common iOS/AVFoundation extensions exists in `RecordingLibraryScanner.defaultSupportedExtensions`.
+- The user-facing importer still only accepted `.folder`, so a standalone MP3 or Voice Memos export could not be picked directly.
+- Subtitle recognition is wired through `SFSpeechURLRecognitionRequest` with fixed `zh_CN`; it can process recorded audio files available as local file URLs, subject to iOS Speech permission and recognizer availability.
+
+Fix:
+
+- `ContentView.fileImporter` now accepts `.folder` and `.audio`, with multiple selection enabled.
+- `AudioLibraryViewModel` now tracks selected source URLs instead of only one selected folder.
+- `RecordingLibraryScanner` now exposes `scan(urls:metadata:)` so direct audio file imports and folder imports share the same metadata/playback/subtitle model.
+- Added a scanner regression test for direct `.MP3` and `.m4a` selections.

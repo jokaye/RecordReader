@@ -39,10 +39,10 @@ struct ContentView: View {
         .foregroundStyle(.white)
         .fileImporter(
             isPresented: $isFolderImporterPresented,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
+            allowedContentTypes: [.folder, .audio],
+            allowsMultipleSelection: true
         ) { result in
-            library.selectFolder(result)
+            library.selectImportedItems(result)
         }
         .sheet(isPresented: $isLibraryPresented) {
             RecordingLibrarySheet(library: library) { recording in
@@ -79,7 +79,7 @@ struct ContentView: View {
                 Image(systemName: "folder")
                     .font(.title2.weight(.semibold))
             }
-            .accessibilityLabel("选择录音文件夹")
+            .accessibilityLabel("选择录音文件夹或音频文件")
 
             Spacer()
 
@@ -201,7 +201,7 @@ struct ContentView: View {
             Image(systemName: "waveform")
                 .font(.system(size: 54, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.82))
-            Text("选择录音文件夹")
+            Text("选择录音文件夹或音频文件")
                 .font(.title2.weight(.bold))
             Text("扫描手机可访问的录音文件，支持播放、收藏、分类和中文语音转字幕。")
                 .font(.body)
@@ -211,7 +211,7 @@ struct ContentView: View {
             Button {
                 isFolderImporterPresented = true
             } label: {
-                Label("选择文件夹", systemImage: "folder.badge.plus")
+                Label("选择录音", systemImage: "folder.badge.plus")
                     .font(.headline)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)

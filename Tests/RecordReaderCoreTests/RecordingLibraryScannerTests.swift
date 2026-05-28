@@ -45,6 +45,21 @@ final class RecordingLibraryScannerTests: XCTestCase {
         XCTAssertEqual(Set(recordings.map(\.fileExtension)), Set(supportedExtensions))
     }
 
+    func testScannerAcceptsDirectAudioFileSelections() throws {
+        let folder = try makeTemporaryFolder()
+        let mp3URL = folder.appendingPathComponent("课堂录音.MP3")
+        let m4aURL = folder.appendingPathComponent("语音备忘录.m4a")
+        let textURL = folder.appendingPathComponent("说明.txt")
+        try Data("mp3".utf8).write(to: mp3URL)
+        try Data("m4a".utf8).write(to: m4aURL)
+        try Data("text".utf8).write(to: textURL)
+
+        let recordings = try RecordingLibraryScanner().scan(urls: [mp3URL, textURL, m4aURL], metadata: .empty)
+
+        XCTAssertEqual(recordings.map(\.title), ["课堂录音", "语音备忘录"])
+        XCTAssertEqual(recordings.map(\.fileExtension), ["mp3", "m4a"])
+    }
+
     func testScannerFailsForMissingFolderWithActionableError() throws {
         let scanner = RecordingLibraryScanner()
         let missingFolder = URL(fileURLWithPath: "/tmp/record-reader-missing-\(UUID().uuidString)")

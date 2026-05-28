@@ -20,7 +20,8 @@ final class AudioLibraryViewModel: ObservableObject {
     private let store: RecordingMetadataStore
     private let transcriber: SpeechTranscriber
     private var metadata: RecordingLibraryMetadata
-    private var folderHasSecurityScope = false
+    private var selectedSources: [URL] = []
+    private var activeSecurityScopedURLs: [URL] = []
 
     init(
         scanner: RecordingLibraryScanner = RecordingLibraryScanner(),
@@ -87,23 +88,24 @@ final class AudioLibraryViewModel: ObservableObject {
         }
     }
 
-    func selectFolder(_ result: Result<[URL], Error>) {
+    func selectImportedItems(_ result: Result<[URL], Error>) {
         do {
-            guard let folder = try result.get().first else {
+            let urls = try result.get()
+            guard !urls.isEmpty else {
                 throw RecordingSelectionError.noFolderSelected
             }
-            open(folder: folder, persistBookmark: true)
+            open(urls: urls, persistFolderBookmarkIfPossible: true)
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     func refresh() {
-        guard let selectedFolder else {
-            errorMessage = "刷新前请先选择录音文件夹。"
+        guard !selectedSources.isEmpty else {
+            errorMessage = "刷新前请先选择录音文件夹或音频文件。"
             return
         }
-        loadRecordings(from: selectedFolder)
+        loadRecordings(from: selectedSources)
     }
 
     func select(_ recording: Recording) {
@@ -175,13 +177,18 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private func open(folder: URL, persistBookmark: Bool) {
-        releaseSecurityScopedFolderIfNeeded()
-        folderHasSecurityScope = folder.startAccessingSecurityScopedResource()
-        selectedFolder = folder
+        open(urls: [folder], persistFolderBookmarkIfPossible: persistBookmark)
+    }
 
-        if persistBookmark {
+    private func open(urls: [URL], persistFolderBookmarkIfPossible: Bool) {
+        releaseSecurityScopedURLs()
+        activeSecurityScopedURLs = urls.filter { $0.startAccessingSecurityScopedResource() }
+        selectedSources = urls
+        selectedFolder = singleSelectedFolder(from: urls)
+
+        if persistFolderBookmarkIfPossible, let selectedFolder {
             do {
-                metadata.selectedFolderBookmark = try folder.bookmarkData(
+                metadata.selectedFolderBookmark = try selectedFolder.bookmarkData(
                     options: [],
                     includingResourceValuesForKeys: nil,
                     relativeTo: nil
@@ -190,14 +197,21 @@ final class AudioLibraryViewModel: ObservableObject {
             } catch {
                 errorMessage = "无法保存录音文件夹权限：\(error.localizedDescription)"
             }
+        } else if persistFolderBookmarkIfPossible {
+            metadata.selectedFolderBookmark = nil
+            do {
+                try persistMetadata()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
 
-        loadRecordings(from: folder)
+        loadRecordings(from: urls)
     }
 
-    private func loadRecordings(from folder: URL) {
+    private func loadRecordings(from urls: [URL]) {
         do {
-            recordings = try scanner.scan(folder: folder, metadata: metadata)
+            recordings = try scanner.scan(urls: urls, metadata: metadata)
             selectedRecording = preferredSelectionAfterLoad
             errorMessage = nil
         } catch {
@@ -220,8 +234,8 @@ final class AudioLibraryViewModel: ObservableObject {
         metadata.records[id] = record
         do {
             try persistMetadata()
-            if let selectedFolder {
-                loadRecordings(from: selectedFolder)
+            if !selectedSources.isEmpty {
+                loadRecordings(from: selectedSources)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -242,11 +256,20 @@ final class AudioLibraryViewModel: ObservableObject {
         try store.save(metadata)
     }
 
-    private func releaseSecurityScopedFolderIfNeeded() {
-        if folderHasSecurityScope {
-            selectedFolder?.stopAccessingSecurityScopedResource()
-            folderHasSecurityScope = false
+    private func releaseSecurityScopedURLs() {
+        activeSecurityScopedURLs.forEach { $0.stopAccessingSecurityScopedResource() }
+        activeSecurityScopedURLs = []
+    }
+
+    private func singleSelectedFolder(from urls: [URL]) -> URL? {
+        guard urls.count == 1, let url = urls.first else {
+            return nil
         }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return nil
+        }
+        return url
     }
 }
 
@@ -254,7 +277,7 @@ private enum RecordingSelectionError: Error, LocalizedError {
     case noFolderSelected
 
     var errorDescription: String? {
-        "没有选择录音文件夹。"
+        "没有选择录音文件夹或音频文件。"
     }
 }
 

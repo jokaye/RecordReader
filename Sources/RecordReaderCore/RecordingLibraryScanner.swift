@@ -65,8 +65,44 @@ public struct RecordingLibraryScanner {
             options: [.skipsHiddenFiles]
         )
 
-        return try urls.compactMap { url in
-            let values = try url.resourceValues(forKeys: Set(keys))
+        return try recordings(from: urls, metadata: metadata)
+    }
+
+    public func scan(urls: [URL], metadata: RecordingLibraryMetadata) throws -> [Recording] {
+        var recordingsByID: [String: Recording] = [:]
+
+        for url in urls {
+            var isDirectory: ObjCBool = false
+            let exists = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            guard exists else {
+                throw RecordingLibraryError.folderNotFound(url.path)
+            }
+
+            let recordings: [Recording]
+            if isDirectory.boolValue {
+                recordings = try scan(folder: url, metadata: metadata)
+            } else {
+                recordings = try self.recordings(from: [url], metadata: metadata)
+            }
+
+            for recording in recordings {
+                recordingsByID[recording.id] = recording
+            }
+        }
+
+        return sort(Array(recordingsByID.values))
+    }
+
+    private func recordings(from urls: [URL], metadata: RecordingLibraryMetadata) throws -> [Recording] {
+        let keys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .creationDateKey,
+            .contentModificationDateKey,
+            .fileSizeKey
+        ]
+
+        let recordings = try urls.compactMap { url -> Recording? in
+            let values = try url.resourceValues(forKeys: keys)
             guard values.isRegularFile == true else {
                 return nil
             }
@@ -90,7 +126,12 @@ public struct RecordingLibraryScanner {
                 subtitle: recordMetadata?.subtitle
             )
         }
-        .sorted { lhs, rhs in
+
+        return sort(recordings)
+    }
+
+    private func sort(_ recordings: [Recording]) -> [Recording] {
+        recordings.sorted { lhs, rhs in
             lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
     }
