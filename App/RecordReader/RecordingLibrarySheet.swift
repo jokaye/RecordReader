@@ -97,7 +97,7 @@ struct RecordingLibrarySheet: View {
             HStack(spacing: 12) {
                 if isBatchMode {
                     Image(systemName: selectedIDs.contains(recording.id) ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selectedIDs.contains(recording.id) ? .accent : .secondary)
+                        .foregroundStyle(selectedIDs.contains(recording.id) ? Color.accentColor : Color.secondary)
                         .frame(width: 24)
                 } else {
                     Image(systemName: recording.isFavorite ? "heart.fill" : "waveform")

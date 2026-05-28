@@ -111,14 +111,16 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, let player = self.player else {
-                    return
-                }
-                self.currentTime = player.currentTime
-                self.isPlaying = player.isPlaying
-            }
+            self?.syncPlaybackState()
         }
+    }
+
+    private func syncPlaybackState() {
+        guard let player else {
+            return
+        }
+        currentTime = player.currentTime
+        isPlaying = player.isPlaying
     }
 
     private func stopTimer() {
