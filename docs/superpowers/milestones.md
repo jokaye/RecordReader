@@ -369,3 +369,52 @@ Cloud result:
 Remaining manual gate:
 
 - Re-test folder selection on a real iPhone. CI can compile the importer code but cannot drive the iOS Files folder picker.
+
+### 2026-05-28 M13: Import, Playback, Queue, Volume, and Subtitle Hardening
+
+Status: implemented and cloud verified.
+
+User report:
+
+- Selecting audio and tapping Open still appeared to do nothing.
+- The folder import button also appeared to do nothing.
+- Re-check file opening, playback, previous/next, volume, and generated subtitles seriously.
+
+Root-cause analysis:
+
+- Import selection after scanning used `visibleRecordings`, so an existing favorites/category filter or stale search text could hide newly imported ordinary audio and make the UI appear unchanged.
+- The import chooser introduced in M12 still required one modal presentation to trigger another file importer presentation, which is fragile on iOS.
+- Playback did not check `prepareToPlay()` or `play()` return values, so a failed play attempt could look like playback started.
+- Speech recognition relied on the library-level security scope, but the transcriber itself did not hold a security-scoped URL while the async recognition task was running.
+
+Changes:
+
+- Removed the import chooser. Folder import and audio import are now direct buttons.
+- Added a visible audio import button in the header and a separate "选择音频" button in the empty state.
+- Added `RecordingListQuery.initialSelectionAfterImport` and a Core regression test so import selection ignores stale filters/search.
+- Import now resets filter to all and clears search text before selecting the first imported recording.
+- Empty imports now show a clear "没有找到支持的录音文件" message.
+- Playback now sets `AVAudioPlayer.volume = 1.0`, validates `prepareToPlay()`, validates `play()`, and surfaces a clear failure message if playback cannot start.
+- Subtitle recognition now starts and releases its own security-scoped URL access around the async speech task.
+- If Speech returns only formatted text and no segment timings, the app now still creates a subtitle segment instead of showing an empty ready state.
+- Updated `docs/device-validation.md` with direct folder/audio buttons and volume checks.
+
+Verification:
+
+- Local Core typecheck probe for `initialSelectionAfterImport` passed.
+- Local `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift && swiftc -parse App/RecordReader/*.swift` passed.
+- Local `xcodegen generate` passed.
+- Local `git diff --check` passed.
+- Local `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud result:
+
+- Commit `ab75a6a` failed in Core tests because the new regression test depended on Chinese localized sort order.
+- Commit `ae08f68` fixed the test data and passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26563821232`
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7261272433`, digest `sha256:b8d5d49ee5286528f92571676f13b7ef915c9bf7155e9d9114d3b2a79b942e1e`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-28 16:32:48 +0800`.
+
+Remaining manual gate:
+
+- Re-test on a real iPhone: direct audio import, direct folder import, play with device volume up, previous/next with at least three recordings, continuous playback, and Chinese subtitle recognition. CI validates code/tests/builds but cannot drive the iOS Files picker, physical audio output, or live Speech service.
