@@ -262,7 +262,7 @@ Cloud result:
 
 ### 2026-05-28 M10: Device Validation, Seek, and Speech Failure Detail
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud verified.
 
 User direction:
 
@@ -280,3 +280,14 @@ Changes:
 - Recognition failures now distinguish unavailable recognizer, no speech detected, timeout, and system recognition errors.
 - Speech requests use `.dictation` hint and punctuation when available.
 - Added `docs/device-validation.md` with iPhone validation steps for MP3, iOS recordings, playback seek, and app-generated Chinese subtitles.
+
+Cloud result:
+
+- Commit `eff3390` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26559685879`
+- Duration: 1m 51s.
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7259555941`, digest `sha256:b2b834bd3e8b54577425f2c1f3f7eb909b7fd4d554ffbf2bc4d1cdd058b86ca3`.
+
+Remaining manual gate:
+
+- Run `docs/device-validation.md` on a real iPhone. CI cannot validate iOS file picker security scope, audio playback hardware behavior, user speech permissions, or live iOS Speech recognition service behavior.
