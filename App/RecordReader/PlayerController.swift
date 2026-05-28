@@ -8,6 +8,7 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
     @Published private(set) var currentTime: TimeInterval = 0
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var errorMessage: String?
+    var onFinish: (() -> Void)?
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
@@ -66,10 +67,18 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             isPlaying = false
             stopTimer()
         } else {
-            player.play()
-            isPlaying = true
-            startTimer()
+            play()
         }
+    }
+
+    func play() {
+        guard let player else {
+            errorMessage = "请先选择一段录音再播放。"
+            return
+        }
+        player.play()
+        isPlaying = true
+        startTimer()
     }
 
     func seek(by delta: TimeInterval) {
@@ -95,6 +104,7 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             self.isPlaying = false
             self.currentTime = finishedDuration
             self.stopTimer()
+            self.onFinish?()
         }
     }
 

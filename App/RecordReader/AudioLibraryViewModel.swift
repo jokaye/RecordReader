@@ -2,12 +2,6 @@ import Foundation
 import Combine
 import RecordReaderCore
 
-enum RecordingFilter: Hashable {
-    case all
-    case favorites
-    case category(String)
-}
-
 @MainActor
 final class AudioLibraryViewModel: ObservableObject {
     @Published private(set) var recordings: [Recording] = []
@@ -15,6 +9,8 @@ final class AudioLibraryViewModel: ObservableObject {
     @Published private(set) var selectedFolder: URL?
     @Published private(set) var filter: RecordingFilter = .all
     @Published private(set) var errorMessage: String?
+    @Published var searchText = ""
+    @Published var sort: RecordingSort = .nameAscending
 
     private let scanner: RecordingLibraryScanner
     private let store: RecordingMetadataStore
@@ -39,15 +35,13 @@ final class AudioLibraryViewModel: ObservableObject {
         }
     }
 
-    var filteredRecordings: [Recording] {
-        switch filter {
-        case .all:
-            return recordings
-        case .favorites:
-            return recordings.filter(\.isFavorite)
-        case .category(let category):
-            return recordings.filter { $0.category == category }
-        }
+    var visibleRecordings: [Recording] {
+        RecordingListQuery.visibleRecordings(
+            recordings,
+            filter: filter,
+            searchText: searchText,
+            sort: sort
+        )
     }
 
     var categories: [String] {
@@ -114,7 +108,52 @@ final class AudioLibraryViewModel: ObservableObject {
 
     func setFilter(_ filter: RecordingFilter) {
         self.filter = filter
-        selectedRecording = filteredRecordings.first
+        selectedRecording = visibleRecordings.first
+    }
+
+    func setSort(_ sort: RecordingSort) {
+        self.sort = sort
+        preserveSelectionOrSelectFirstVisible()
+    }
+
+    func selectPrevious() -> Recording? {
+        guard let selectedRecording else {
+            let first = visibleRecordings.first
+            self.selectedRecording = first
+            return first
+        }
+        guard let previous = RecordingListQuery.previousRecording(before: selectedRecording.id, in: visibleRecordings) else {
+            return nil
+        }
+        self.selectedRecording = previous
+        return previous
+    }
+
+    func selectNext() -> Recording? {
+        guard let selectedRecording else {
+            let first = visibleRecordings.first
+            self.selectedRecording = first
+            return first
+        }
+        guard let next = RecordingListQuery.nextRecording(after: selectedRecording.id, in: visibleRecordings) else {
+            return nil
+        }
+        self.selectedRecording = next
+        return next
+    }
+
+    var hasPreviousRecording: Bool {
+        guard let selectedRecording else {
+            return false
+        }
+        return RecordingListQuery.previousRecording(before: selectedRecording.id, in: visibleRecordings) != nil
+    }
+
+    var hasNextRecording: Bool {
+        guard let selectedRecording else {
+            return false
+        }
+        return RecordingListQuery.nextRecording(after: selectedRecording.id, in: visibleRecordings) != nil
     }
 
     func toggleFavorite() {
@@ -129,6 +168,14 @@ final class AudioLibraryViewModel: ObservableObject {
         )
         record.isFavorite.toggle()
         updateMetadata(record, for: selectedRecording.id)
+    }
+
+    func setFavorite(_ isFavorite: Bool, ids: Set<Recording.ID>) {
+        updateRecords(ids: ids) { recording, metadata in
+            metadata.isFavorite = isFavorite
+            metadata.category = metadata.category ?? recording.category
+            metadata.subtitle = metadata.subtitle ?? recording.subtitle
+        }
     }
 
     func setCategory(_ category: String?) {
@@ -146,6 +193,17 @@ final class AudioLibraryViewModel: ObservableObject {
         )
         record.category = normalizedCategory
         updateMetadata(record, for: selectedRecording.id)
+    }
+
+    func setCategory(_ category: String?, ids: Set<Recording.ID>) {
+        let normalizedCategory = category?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
+        updateRecords(ids: ids) { recording, metadata in
+            metadata.isFavorite = metadata.isFavorite || recording.isFavorite
+            metadata.category = normalizedCategory
+            metadata.subtitle = metadata.subtitle ?? recording.subtitle
+        }
     }
 
     func recognizeSubtitleForSelectedRecording() {
@@ -222,16 +280,42 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private var preferredSelectionAfterLoad: Recording? {
-        switch filter {
-        case .all:
-            return recordings.first
-        case .favorites, .category(_):
-            return filteredRecordings.first
-        }
+        visibleRecordings.first
     }
 
     private func updateMetadata(_ record: RecordingMetadata, for id: String) {
         metadata.records[id] = record
+        do {
+            try persistMetadata()
+            if !selectedSources.isEmpty {
+                loadRecordings(from: selectedSources)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func updateRecords(
+        ids: Set<Recording.ID>,
+        mutate: (Recording, inout RecordingMetadata) -> Void
+    ) {
+        guard !ids.isEmpty else {
+            errorMessage = "请先选择要批量管理的录音。"
+            return
+        }
+        let recordingsByID = Dictionary(uniqueKeysWithValues: recordings.map { ($0.id, $0) })
+        for id in ids {
+            guard let recording = recordingsByID[id] else {
+                continue
+            }
+            var record = metadata.records[id] ?? RecordingMetadata(
+                isFavorite: recording.isFavorite,
+                category: recording.category,
+                subtitle: recording.subtitle
+            )
+            mutate(recording, &record)
+            metadata.records[id] = record
+        }
         do {
             try persistMetadata()
             if !selectedSources.isEmpty {
@@ -259,6 +343,16 @@ final class AudioLibraryViewModel: ObservableObject {
     private func releaseSecurityScopedURLs() {
         activeSecurityScopedURLs.forEach { $0.stopAccessingSecurityScopedResource() }
         activeSecurityScopedURLs = []
+    }
+
+    private func preserveSelectionOrSelectFirstVisible() {
+        guard let selectedRecording else {
+            self.selectedRecording = visibleRecordings.first
+            return
+        }
+        if !visibleRecordings.contains(where: { $0.id == selectedRecording.id }) {
+            self.selectedRecording = visibleRecordings.first
+        }
     }
 
     private func singleSelectedFolder(from urls: [URL]) -> URL? {

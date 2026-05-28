@@ -291,3 +291,22 @@ Cloud result:
 Remaining manual gate:
 
 - Run `docs/device-validation.md` on a real iPhone. CI cannot validate iOS file picker security scope, audio playback hardware behavior, user speech permissions, or live iOS Speech recognition service behavior.
+
+### 2026-05-28 M11: Playback Queue, Search, Sort, and Batch Management
+
+Status: implemented locally; cloud verification pending.
+
+User direction:
+
+- Add previous / next / continuous playback.
+- Add search, sorting, and batch management.
+
+Changes:
+
+- Added `RecordingListQuery` in Core for visible recording calculation and queue navigation.
+- Added Core tests for filtering, search, sorting, and previous/next queue behavior.
+- `AudioLibraryViewModel` now exposes `visibleRecordings`, `searchText`, `sort`, `selectPrevious()`, `selectNext()`, batch favorite, and batch category updates.
+- Player now supports a finish callback; the app auto-selects and plays the next visible recording when playback ends.
+- Main player now has previous and next buttons.
+- Recording list now supports search, sort menu, and selection mode.
+- Batch actions support favorite, unfavorite, set category, and clear category.

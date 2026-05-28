@@ -64,6 +64,12 @@ struct ContentView: View {
         }
         .task {
             library.restoreLastFolder()
+            player.onFinish = {
+                if let next = library.selectNext() {
+                    player.load(url: next.url)
+                    player.play()
+                }
+            }
         }
         .onChange(of: library.selectedRecording?.id) { _, _ in
             if let selected = library.selectedRecording {
@@ -168,7 +174,17 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.7))
             }
 
-            HStack(spacing: 36) {
+            HStack(spacing: 24) {
+                Button {
+                    if let previous = library.selectPrevious() {
+                        player.load(url: previous.url)
+                    }
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                }
+                .disabled(!library.hasPreviousRecording)
+                .accessibilityLabel("上一首")
+
                 Button {
                     player.seek(by: -15)
                 } label: {
@@ -192,6 +208,16 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "goforward.15")
                 }
+
+                Button {
+                    if let next = library.selectNext() {
+                        player.load(url: next.url)
+                    }
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                }
+                .disabled(!library.hasNextRecording)
+                .accessibilityLabel("下一首")
             }
             .font(.title.weight(.semibold))
             .buttonStyle(.plain)
