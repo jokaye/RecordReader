@@ -7,7 +7,6 @@ struct ContentView: View {
     @StateObject private var player = PlayerController()
     @State private var isFolderImporterPresented = false
     @State private var isAudioImporterPresented = false
-    @State private var isImportChooserPresented = false
     @State private var isLibraryPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
@@ -54,15 +53,6 @@ struct ContentView: View {
         ) { result in
             library.selectImportedItems(result)
         }
-        .confirmationDialog("选择导入方式", isPresented: $isImportChooserPresented, titleVisibility: .visible) {
-            Button("选择录音文件夹") {
-                isFolderImporterPresented = true
-            }
-            Button("选择音频文件") {
-                isAudioImporterPresented = true
-            }
-            Button("取消", role: .cancel) {}
-        }
         .sheet(isPresented: $isLibraryPresented) {
             RecordingLibrarySheet(library: library) { recording in
                 library.select(recording)
@@ -99,12 +89,20 @@ struct ContentView: View {
     private var header: some View {
         HStack {
             Button {
-                isImportChooserPresented = true
+                isFolderImporterPresented = true
             } label: {
                 Image(systemName: "folder")
                     .font(.title2.weight(.semibold))
             }
-            .accessibilityLabel("选择录音文件夹或音频文件")
+            .accessibilityLabel("选择录音文件夹")
+
+            Button {
+                isAudioImporterPresented = true
+            } label: {
+                Image(systemName: "waveform.badge.plus")
+                    .font(.title2.weight(.semibold))
+            }
+            .accessibilityLabel("选择音频文件")
 
             Spacer()
 
@@ -274,16 +272,30 @@ struct ContentView: View {
                     .foregroundStyle(.red.opacity(0.9))
                     .multilineTextAlignment(.center)
             }
-            Button {
-                isImportChooserPresented = true
-            } label: {
-                Label("选择录音", systemImage: "folder.badge.plus")
-                    .font(.headline)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(.white)
-                    .foregroundStyle(.black)
-                    .clipShape(Capsule())
+            HStack(spacing: 12) {
+                Button {
+                    isFolderImporterPresented = true
+                } label: {
+                    Label("选择文件夹", systemImage: "folder.badge.plus")
+                        .font(.headline)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background(.white)
+                        .foregroundStyle(.black)
+                        .clipShape(Capsule())
+                }
+
+                Button {
+                    isAudioImporterPresented = true
+                } label: {
+                    Label("选择音频", systemImage: "waveform.badge.plus")
+                        .font(.headline)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background(.white.opacity(0.14))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
             }
             Spacer()
         }

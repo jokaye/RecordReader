@@ -244,6 +244,8 @@ final class AudioLibraryViewModel: ObservableObject {
         activeSecurityScopedURLs = urls.filter { $0.startAccessingSecurityScopedResource() }
         selectedSources = urls
         selectedFolder = singleSelectedFolder(from: urls)
+        filter = .all
+        searchText = ""
 
         if persistFolderBookmarkIfPossible, let selectedFolder {
             do {
@@ -276,7 +278,7 @@ final class AudioLibraryViewModel: ObservableObject {
         do {
             recordings = try scanner.scan(urls: urls, metadata: metadata)
             selectedRecording = preferredSelectionAfterLoad
-            errorMessage = nil
+            errorMessage = recordings.isEmpty ? "没有找到支持的录音文件。请选择包含 MP3、M4A、WAV 等音频的文件夹，或直接选择音频文件。" : nil
         } catch {
             recordings = []
             selectedRecording = nil
@@ -285,7 +287,7 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private var preferredSelectionAfterLoad: Recording? {
-        visibleRecordings.first
+        RecordingListQuery.initialSelectionAfterImport(recordings, sort: sort)
     }
 
     private func updateMetadata(_ record: RecordingMetadata, for id: String) {

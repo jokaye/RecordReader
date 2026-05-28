@@ -60,6 +60,26 @@ final class RecordingListQueryTests: XCTestCase {
         XCTAssertNil(RecordingListQuery.nextRecording(after: "c", in: recordings))
     }
 
+    func testInitialImportSelectionIgnoresExistingFiltersAndSearchText() {
+        let recordings = [
+            makeRecording(id: "a", title: "导入录音", fileExtension: "mp3", modifiedAt: Date(timeIntervalSince1970: 10)),
+            makeRecording(id: "b", title: "其他录音", fileExtension: "m4a", modifiedAt: Date(timeIntervalSince1970: 20))
+        ]
+
+        let currentlyVisible = RecordingListQuery.visibleRecordings(
+            recordings,
+            filter: .favorites,
+            searchText: "不存在",
+            sort: .nameAscending
+        )
+
+        XCTAssertTrue(currentlyVisible.isEmpty)
+        XCTAssertEqual(
+            RecordingListQuery.initialSelectionAfterImport(recordings, sort: .nameAscending)?.id,
+            "a"
+        )
+    }
+
     private func makeRecording(
         id: String,
         title: String,

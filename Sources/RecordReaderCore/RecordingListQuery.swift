@@ -62,6 +62,13 @@ public enum RecordingListQuery {
         return recordings[nextIndex]
     }
 
+    public static func initialSelectionAfterImport(
+        _ recordings: [Recording],
+        sort: RecordingSort
+    ) -> Recording? {
+        sortRecordings(recordings, by: sort).first
+    }
+
     private static func matches(filter: RecordingFilter, recording: Recording) -> Bool {
         switch filter {
         case .all:
