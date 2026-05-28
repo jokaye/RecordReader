@@ -294,7 +294,7 @@ Remaining manual gate:
 
 ### 2026-05-28 M11: Playback Queue, Search, Sort, and Batch Management
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud verified.
 
 User direction:
 
@@ -310,3 +310,23 @@ Changes:
 - Main player now has previous and next buttons.
 - Recording list now supports search, sort menu, and selection mode.
 - Batch actions support favorite, unfavorite, set category, and clear category.
+
+Verification:
+
+- Local `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift && swiftc -parse App/RecordReader/*.swift` passed.
+- Local `xcodegen generate` passed.
+- Local `git diff --check` passed.
+- Local `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud result:
+
+- Commit `874a63d` failed in the iOS app build after Core tests passed.
+- Cause: the batch selection checkmark used `.accent`, which is not a valid `ShapeStyle`.
+- Fix: commit `cc00bcf` replaced the selection tint with explicit `Color.accentColor` and simplified the playback timer state sync.
+- Commit `cc00bcf` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26562654407`
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7260778818`, digest `sha256:1eeba19c0a119e7d3b28fb84f29714cc5cd3bc60b5d1c633e258c1e21a472cd6`.
+
+Remaining manual gate:
+
+- Re-run `docs/device-validation.md` on a real iPhone after installing the latest unsigned IPA. CI cannot validate real file picker security scope, Bluetooth/speaker playback behavior, iOS Speech service availability, or user permission flows.
