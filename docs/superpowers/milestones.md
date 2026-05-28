@@ -418,3 +418,42 @@ Cloud result:
 Remaining manual gate:
 
 - Re-test on a real iPhone: direct audio import, direct folder import, play with device volume up, previous/next with at least three recordings, continuous playback, and Chinese subtitle recognition. CI validates code/tests/builds but cannot drive the iOS Files picker, physical audio output, or live Speech service.
+
+### 2026-05-28 M14: Direct Audio Open No-Op Fix
+
+Status: implemented and cloud verified.
+
+User report:
+
+- Selecting an audio file and tapping Open still produced no visible result.
+
+Root-cause analysis:
+
+- `ContentView` still mounted two separate `fileImporter` modifiers on the same view. iOS SwiftUI file importer presentation is more reliable when one importer owns the presentation and the app switches its mode before presenting.
+- Directly selected iOS Files URLs can come from file providers where `URLResourceValues.isRegularFile` is absent or unreliable. The scanner required `isRegularFile == true`, so selected audio files could be silently skipped even though their extension was supported.
+
+Changes:
+
+- Replaced the two importer modifiers with one `fileImporter` driven by an `ImportMode`.
+- Folder mode uses `.folder` with single selection.
+- Audio mode uses `.audio` with multiple selection.
+- Direct audio-file scans no longer require `isRegularFile == true`; they still reject explicit directories and unsupported extensions.
+- Folder scans still require regular files for directory contents.
+
+Verification:
+
+- Local `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift && swiftc -parse App/RecordReader/*.swift` passed.
+- Local `xcodegen generate` passed.
+- Local `git diff --check` passed.
+- Local `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud result:
+
+- Commit `42bf3f1` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26564636821`
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7261631523`, digest `sha256:02779f8a4e11f6d5361174d07800fe42a5817b72bfd6fe229c4cd1db3dd15216`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-28 16:50:38 +0800`.
+
+Remaining manual gate:
+
+- Re-test direct audio import on a real iPhone with the 16:50 IPA. The expected result is that tapping Open immediately exits the picker and the player shows the selected recording. If it still fails, capture whether the app shows the "没有找到支持的录音文件" message; that distinguishes picker callback failure from scanner rejection.
