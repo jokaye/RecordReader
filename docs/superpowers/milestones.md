@@ -330,3 +330,42 @@ Cloud result:
 Remaining manual gate:
 
 - Re-run `docs/device-validation.md` on a real iPhone after installing the latest unsigned IPA. CI cannot validate real file picker security scope, Bluetooth/speaker playback behavior, iOS Speech service availability, or user permission flows.
+
+### 2026-05-28 M12: Folder Import Loading Fix
+
+Status: implemented and cloud verified.
+
+User report:
+
+- After choosing a folder, the app stayed in loading.
+
+Root-cause analysis:
+
+- The import UI used one `fileImporter` for both `.folder` and `.audio` with multiple selection enabled.
+- That mixed mode is fragile on iOS Files for folder selection, and it also made the app unable to show a clear scan/error state after the picker returned.
+
+Changes:
+
+- Split folder import and audio-file import into two dedicated `fileImporter` modifiers.
+- Folder import now allows only one `.folder` selection.
+- Audio import keeps multiple `.audio` selection.
+- Added an import chooser so users explicitly pick "录音文件夹" or "音频文件".
+- Added `AudioLibraryViewModel.isLoading` and empty-state loading/error messaging.
+
+Verification:
+
+- Local `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift && swiftc -parse App/RecordReader/*.swift` passed.
+- Local `xcodegen generate` passed.
+- Local `git diff --check` passed.
+- Local `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud result:
+
+- Commit `87ed438` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26563279973`
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7261047271`, digest `sha256:f1f031fe18e43aaaba89a7cf4d157b9f68b80774ce1f930d5646fa5297dee59b`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-28 16:21:29 +0800`.
+
+Remaining manual gate:
+
+- Re-test folder selection on a real iPhone. CI can compile the importer code but cannot drive the iOS Files folder picker.
