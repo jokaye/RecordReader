@@ -249,3 +249,9 @@ Fix:
 - `AudioLibraryViewModel` now tracks selected source URLs instead of only one selected folder.
 - `RecordingLibraryScanner` now exposes `scan(urls:metadata:)` so direct audio file imports and folder imports share the same metadata/playback/subtitle model.
 - Added a scanner regression test for direct `.MP3` and `.m4a` selections.
+
+Cloud result:
+
+- Commit `e55e1d4` failed in `swift test`.
+- Cause: the new direct-file test asserted a specific Chinese localized sort order. CI returned the same recordings in a different valid localized order.
+- Fix: assert direct-file import by sets for titles/extensions, keeping the test focused on MP3/iOS recording support instead of locale-specific sorting.

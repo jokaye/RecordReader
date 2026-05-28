@@ -56,8 +56,8 @@ final class RecordingLibraryScannerTests: XCTestCase {
 
         let recordings = try RecordingLibraryScanner().scan(urls: [mp3URL, textURL, m4aURL], metadata: .empty)
 
-        XCTAssertEqual(recordings.map(\.title), ["课堂录音", "语音备忘录"])
-        XCTAssertEqual(recordings.map(\.fileExtension), ["mp3", "m4a"])
+        XCTAssertEqual(Set(recordings.map(\.title)), ["课堂录音", "语音备忘录"])
+        XCTAssertEqual(Set(recordings.map(\.fileExtension)), ["mp3", "m4a"])
     }
 
     func testScannerFailsForMissingFolderWithActionableError() throws {
