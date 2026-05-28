@@ -9,6 +9,7 @@ final class AudioLibraryViewModel: ObservableObject {
     @Published private(set) var selectedFolder: URL?
     @Published private(set) var filter: RecordingFilter = .all
     @Published private(set) var errorMessage: String?
+    @Published private(set) var isLoading = false
     @Published var searchText = ""
     @Published var sort: RecordingSort = .nameAscending
 
@@ -268,6 +269,10 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private func loadRecordings(from urls: [URL]) {
+        isLoading = true
+        defer {
+            isLoading = false
+        }
         do {
             recordings = try scanner.scan(urls: urls, metadata: metadata)
             selectedRecording = preferredSelectionAfterLoad

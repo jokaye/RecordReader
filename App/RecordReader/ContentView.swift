@@ -6,6 +6,8 @@ struct ContentView: View {
     @StateObject private var library = AudioLibraryViewModel()
     @StateObject private var player = PlayerController()
     @State private var isFolderImporterPresented = false
+    @State private var isAudioImporterPresented = false
+    @State private var isImportChooserPresented = false
     @State private var isLibraryPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
@@ -40,10 +42,26 @@ struct ContentView: View {
         .foregroundStyle(.white)
         .fileImporter(
             isPresented: $isFolderImporterPresented,
-            allowedContentTypes: [.folder, .audio],
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            library.selectImportedItems(result)
+        }
+        .fileImporter(
+            isPresented: $isAudioImporterPresented,
+            allowedContentTypes: [.audio],
             allowsMultipleSelection: true
         ) { result in
             library.selectImportedItems(result)
+        }
+        .confirmationDialog("选择导入方式", isPresented: $isImportChooserPresented, titleVisibility: .visible) {
+            Button("选择录音文件夹") {
+                isFolderImporterPresented = true
+            }
+            Button("选择音频文件") {
+                isAudioImporterPresented = true
+            }
+            Button("取消", role: .cancel) {}
         }
         .sheet(isPresented: $isLibraryPresented) {
             RecordingLibrarySheet(library: library) { recording in
@@ -81,7 +99,7 @@ struct ContentView: View {
     private var header: some View {
         HStack {
             Button {
-                isFolderImporterPresented = true
+                isImportChooserPresented = true
             } label: {
                 Image(systemName: "folder")
                     .font(.title2.weight(.semibold))
@@ -244,8 +262,20 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.65))
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
+            if library.isLoading {
+                ProgressView()
+                    .tint(.white)
+                Text("正在扫描录音...")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.65))
+            } else if let errorMessage = library.errorMessage {
+                Text(errorMessage)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.red.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
             Button {
-                isFolderImporterPresented = true
+                isImportChooserPresented = true
             } label: {
                 Label("选择录音", systemImage: "folder.badge.plus")
                     .font(.headline)
