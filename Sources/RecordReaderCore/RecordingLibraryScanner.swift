@@ -65,7 +65,7 @@ public struct RecordingLibraryScanner {
             options: [.skipsHiddenFiles]
         )
 
-        return try recordings(from: urls, metadata: metadata)
+        return try recordings(from: urls, metadata: metadata, requireRegularFile: true)
     }
 
     public func scan(urls: [URL], metadata: RecordingLibraryMetadata) throws -> [Recording] {
@@ -82,7 +82,7 @@ public struct RecordingLibraryScanner {
             if isDirectory.boolValue {
                 recordings = try scan(folder: url, metadata: metadata)
             } else {
-                recordings = try self.recordings(from: [url], metadata: metadata)
+                recordings = try self.recordings(from: [url], metadata: metadata, requireRegularFile: false)
             }
 
             for recording in recordings {
@@ -93,7 +93,11 @@ public struct RecordingLibraryScanner {
         return sort(Array(recordingsByID.values))
     }
 
-    private func recordings(from urls: [URL], metadata: RecordingLibraryMetadata) throws -> [Recording] {
+    private func recordings(
+        from urls: [URL],
+        metadata: RecordingLibraryMetadata,
+        requireRegularFile: Bool
+    ) throws -> [Recording] {
         let keys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .creationDateKey,
@@ -103,7 +107,10 @@ public struct RecordingLibraryScanner {
 
         let recordings = try urls.compactMap { url -> Recording? in
             let values = try url.resourceValues(forKeys: keys)
-            guard values.isRegularFile == true else {
+            if requireRegularFile, values.isRegularFile != true {
+                return nil
+            }
+            if !requireRegularFile, values.isRegularFile == false {
                 return nil
             }
             let fileExtension = url.pathExtension.lowercased()

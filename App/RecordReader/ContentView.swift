@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @StateObject private var library = AudioLibraryViewModel()
     @StateObject private var player = PlayerController()
-    @State private var isFolderImporterPresented = false
-    @State private var isAudioImporterPresented = false
+    @State private var isImporterPresented = false
+    @State private var importMode: ImportMode = .audio
     @State private var isLibraryPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
@@ -40,16 +40,9 @@ struct ContentView: View {
         }
         .foregroundStyle(.white)
         .fileImporter(
-            isPresented: $isFolderImporterPresented,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            library.selectImportedItems(result)
-        }
-        .fileImporter(
-            isPresented: $isAudioImporterPresented,
-            allowedContentTypes: [.audio],
-            allowsMultipleSelection: true
+            isPresented: $isImporterPresented,
+            allowedContentTypes: importMode.allowedContentTypes,
+            allowsMultipleSelection: importMode.allowsMultipleSelection
         ) { result in
             library.selectImportedItems(result)
         }
@@ -89,7 +82,7 @@ struct ContentView: View {
     private var header: some View {
         HStack {
             Button {
-                isFolderImporterPresented = true
+                presentImporter(.folder)
             } label: {
                 Image(systemName: "folder")
                     .font(.title2.weight(.semibold))
@@ -97,7 +90,7 @@ struct ContentView: View {
             .accessibilityLabel("选择录音文件夹")
 
             Button {
-                isAudioImporterPresented = true
+                presentImporter(.audio)
             } label: {
                 Image(systemName: "waveform.badge.plus")
                     .font(.title2.weight(.semibold))
@@ -274,7 +267,7 @@ struct ContentView: View {
             }
             HStack(spacing: 12) {
                 Button {
-                    isFolderImporterPresented = true
+                    presentImporter(.folder)
                 } label: {
                     Label("选择文件夹", systemImage: "folder.badge.plus")
                         .font(.headline)
@@ -286,7 +279,7 @@ struct ContentView: View {
                 }
 
                 Button {
-                    isAudioImporterPresented = true
+                    presentImporter(.audio)
                 } label: {
                     Label("选择音频", systemImage: "waveform.badge.plus")
                         .font(.headline)
@@ -344,6 +337,11 @@ struct ContentView: View {
         min(max(availableHeight * 0.42, 260), 430)
     }
 
+    private func presentImporter(_ mode: ImportMode) {
+        importMode = mode
+        isImporterPresented = true
+    }
+
     private var seekProgressBinding: Binding<Double> {
         Binding(
             get: {
@@ -358,4 +356,27 @@ struct ContentView: View {
 
 private extension Color {
     static let playerBackground = Color(red: 0.07, green: 0.055, blue: 0.07)
+}
+
+private enum ImportMode {
+    case folder
+    case audio
+
+    var allowedContentTypes: [UTType] {
+        switch self {
+        case .folder:
+            return [.folder]
+        case .audio:
+            return [.audio]
+        }
+    }
+
+    var allowsMultipleSelection: Bool {
+        switch self {
+        case .folder:
+            return false
+        case .audio:
+            return true
+        }
+    }
 }
