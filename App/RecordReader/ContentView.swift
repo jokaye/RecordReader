@@ -7,6 +7,7 @@ struct ContentView: View {
     @StateObject private var player = PlayerController()
     @State private var activeImportMode: ImportMode?
     @State private var isLibraryPresented = false
+    @State private var isDebugLogPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
     @State private var seekDraftProgress: Double?
@@ -47,9 +48,13 @@ struct ContentView: View {
         .foregroundStyle(.white)
         .background(
             DocumentPickerPresenter(mode: $activeImportMode) { urls in
+                DebugLog.shared.log("ContentView 收到回调：\(urls.count) 个 URL")
                 library.selectImportedItems(.success(urls))
             }
         )
+        .sheet(isPresented: $isDebugLogPresented) {
+            DebugLogView()
+        }
         .sheet(isPresented: $isLibraryPresented) {
             RecordingLibrarySheet(library: library) { recording in
                 library.select(recording)
@@ -108,6 +113,14 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.82))
 
             Spacer()
+
+            Button {
+                isDebugLogPresented = true
+            } label: {
+                Image(systemName: "ladybug")
+                    .font(.title2.weight(.semibold))
+            }
+            .accessibilityLabel("调试日志")
 
             Button {
                 isLibraryPresented = true
@@ -364,6 +377,7 @@ struct ContentView: View {
     }
 
     private func presentImporter(_ mode: ImportMode) {
+        DebugLog.shared.log("点击导入按钮：\(mode)")
         activeImportMode = mode
     }
 

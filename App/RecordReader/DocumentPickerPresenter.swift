@@ -39,6 +39,7 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
             }
 
             isPresenting = true
+            DebugLog.shared.log("准备弹出文件选择器：\(mode)")
             present(mode: mode, attempt: 0)
         }
 
@@ -48,6 +49,7 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
                 // The hosting view controller may not be in the window yet on the
                 // first layout pass; retry briefly instead of silently no-oping.
                 guard attempt < 10 else {
+                    DebugLog.shared.log("找不到可用的顶层控制器，放弃弹出选择器")
                     isPresenting = false
                     parent.mode = nil
                     return
@@ -66,7 +68,10 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
             picker.shouldShowFileExtensions = true
             picker.delegate = self
             picker.presentationController?.delegate = self
-            presenter.present(picker, animated: true)
+            DebugLog.shared.log("从 \(type(of: presenter)) 弹出选择器（尝试 \(attempt)）")
+            presenter.present(picker, animated: true) {
+                DebugLog.shared.log("选择器已显示")
+            }
         }
 
         private static func topViewController() -> UIViewController? {
@@ -84,24 +89,34 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
         }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            DebugLog.shared.log("代理回调 didPickDocumentsAt：\(urls.count) 个 URL")
+            for url in urls {
+                DebugLog.shared.log("  选中：\(url.lastPathComponent)")
+            }
             finish(delivering: urls)
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            DebugLog.shared.log("代理回调 documentPickerWasCancelled（用户取消）")
             finish(delivering: nil)
         }
 
         func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+            DebugLog.shared.log("选择器被下滑关闭")
             finish(delivering: nil)
         }
 
         private func finish(delivering urls: [URL]?) {
             guard isPresenting else {
+                DebugLog.shared.log("finish 被重复调用，已忽略")
                 return
             }
             isPresenting = false
             if let urls, !urls.isEmpty {
+                DebugLog.shared.log("向 App 交付 \(urls.count) 个 URL")
                 parent.onPick(urls)
+            } else {
+                DebugLog.shared.log("没有可交付的 URL")
             }
             parent.mode = nil
         }

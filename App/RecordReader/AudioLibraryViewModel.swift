@@ -87,12 +87,14 @@ final class AudioLibraryViewModel: ObservableObject {
     func selectImportedItems(_ result: Result<[URL], Error>) {
         do {
             let urls = try result.get()
+            DebugLog.shared.log("selectImportedItems：收到 \(urls.count) 个 URL")
             statusMessage = "已选择 \(urls.count) 项"
             guard !urls.isEmpty else {
                 throw RecordingSelectionError.noFolderSelected
             }
             open(urls: urls, persistFolderBookmarkIfPossible: true)
         } catch {
+            DebugLog.shared.log("selectImportedItems 失败：\(error.localizedDescription)")
             statusMessage = nil
             errorMessage = error.localizedDescription
         }
@@ -244,7 +246,11 @@ final class AudioLibraryViewModel: ObservableObject {
 
     private func open(urls: [URL], persistFolderBookmarkIfPossible: Bool) {
         releaseSecurityScopedURLs()
-        activeSecurityScopedURLs = urls.filter { $0.startAccessingSecurityScopedResource() }
+        activeSecurityScopedURLs = urls.filter { url in
+            let granted = url.startAccessingSecurityScopedResource()
+            DebugLog.shared.log("安全作用域 \(url.lastPathComponent)：\(granted ? "已获取" : "未获取（可能仍可访问）")")
+            return granted
+        }
         selectedSources = urls
         selectedFolder = singleSelectedFolder(from: urls)
         filter = .all
@@ -278,8 +284,16 @@ final class AudioLibraryViewModel: ObservableObject {
         defer {
             isLoading = false
         }
+        DebugLog.shared.log("开始扫描 \(urls.count) 个来源")
+        for url in urls {
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            let ext = url.pathExtension.lowercased()
+            let reachable = FileManager.default.isReadableFile(atPath: url.path)
+            DebugLog.shared.log("  来源 \(url.lastPathComponent) 目录=\(isDir) 扩展名=\(ext.isEmpty ? "无" : ext) 可读=\(reachable)")
+        }
         do {
             recordings = try scanner.scan(urls: urls, metadata: metadata)
+            DebugLog.shared.log("扫描完成：\(recordings.count) 段录音")
             if preserveSelection,
                let currentID = selectedRecording?.id,
                let stillPresent = recordings.first(where: { $0.id == currentID }) {
@@ -290,6 +304,7 @@ final class AudioLibraryViewModel: ObservableObject {
             statusMessage = "扫描到 \(recordings.count) 段录音"
             errorMessage = recordings.isEmpty ? "没有找到支持的录音文件。请选择包含 MP3、M4A、WAV 等音频的文件夹，或直接选择音频文件。" : nil
         } catch {
+            DebugLog.shared.log("扫描失败：\(error.localizedDescription)")
             recordings = []
             selectedRecording = nil
             statusMessage = "扫描失败"

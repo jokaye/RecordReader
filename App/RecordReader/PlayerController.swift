@@ -60,6 +60,7 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             duration = nextPlayer.duration
             isPlaying = false
             errorMessage = nil
+            DebugLog.shared.log("已加载录音 \(url.lastPathComponent)，时长 \(Int(nextPlayer.duration))s")
         } catch {
             player = nil
             loadedURL = nil
@@ -67,6 +68,7 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             duration = 0
             isPlaying = false
             errorMessage = "无法加载这段录音：\(error.localizedDescription)"
+            DebugLog.shared.log("加载录音失败 \(url.lastPathComponent)：\(error.localizedDescription)")
         }
     }
 
