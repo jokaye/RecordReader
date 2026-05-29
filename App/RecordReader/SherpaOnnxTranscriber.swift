@@ -5,6 +5,8 @@ import RecordReaderCore
 actor SherpaOnnxTranscriber {
     private static let sampleRate = 16_000
     private static let featureDim = 80
+    private static let fullCoverageThresholdDuration: TimeInterval = 120
+    private static let fullCoverageWindowDuration: TimeInterval = 25
 
     private var recognizer: SherpaOnnxOfflineRecognizer?
     private var vad: SherpaOnnxVoiceActivityDetectorWrapper?
@@ -22,6 +24,23 @@ actor SherpaOnnxTranscriber {
         let samples = try await decodeAudioFile(url)
         guard !samples.isEmpty else {
             throw SherpaOnnxTranscriberError.noDecodableAudio
+        }
+        let decodedDuration = TimeInterval(samples.count) / TimeInterval(Self.sampleRate)
+        DebugLog.shared.log(
+            String(format: "sherpa-onnx 解码完成：%.1f 秒，%d 个采样", decodedDuration, samples.count)
+        )
+
+        if TranscriptionWindowPlanner.shouldUseFullCoverage(
+            sampleCount: samples.count,
+            sampleRate: Self.sampleRate,
+            thresholdDuration: Self.fullCoverageThresholdDuration
+        ) {
+            let segments = decodeFixedWindows(samples: samples, recognizer: engine.recognizer)
+            DebugLog.shared.log("sherpa-onnx 长音频全覆盖识别完成：\(segments.count) 段字幕")
+            if segments.isEmpty {
+                throw SherpaOnnxTranscriberError.noSpeechDetected
+            }
+            return segments
         }
 
         let windowSize = Int(engine.vadModelConfig.silero_vad.window_size)
@@ -44,12 +63,14 @@ actor SherpaOnnxTranscriber {
 
         if segments.isEmpty {
             let fallback = decodeFixedWindows(samples: samples, recognizer: engine.recognizer)
+            DebugLog.shared.log("sherpa-onnx VAD 未产出字幕，固定窗口兜底完成：\(fallback.count) 段字幕")
             if fallback.isEmpty {
                 throw SherpaOnnxTranscriberError.noSpeechDetected
             }
             return fallback
         }
 
+        DebugLog.shared.log("sherpa-onnx VAD 识别完成：\(segments.count) 段字幕")
         return segments
     }
 
@@ -232,24 +253,26 @@ actor SherpaOnnxTranscriber {
     }
 
     private func decodeFixedWindows(samples: [Float], recognizer: SherpaOnnxOfflineRecognizer) -> [SubtitleSegment] {
-        let windowSize = Self.sampleRate * 30
+        let windows = TranscriptionWindowPlanner.fixedWindows(
+            sampleCount: samples.count,
+            sampleRate: Self.sampleRate,
+            windowDuration: Self.fullCoverageWindowDuration
+        )
+        DebugLog.shared.log("sherpa-onnx 固定窗口识别：\(windows.count) 个窗口")
         var segments: [SubtitleSegment] = []
-        var cursor = 0
-        while cursor < samples.count {
-            let end = min(cursor + windowSize, samples.count)
-            let window = Array(samples[cursor..<end])
+        for plannedWindow in windows {
+            let window = Array(samples[plannedWindow.startSample..<plannedWindow.endSample])
             let result = recognizer.decode(samples: window, sampleRate: Self.sampleRate)
             let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {
                 segments.append(
                     SubtitleSegment(
-                        startTime: TimeInterval(cursor) / TimeInterval(Self.sampleRate),
-                        endTime: TimeInterval(end) / TimeInterval(Self.sampleRate),
+                        startTime: plannedWindow.startTime,
+                        endTime: plannedWindow.endTime,
                         text: text
                     )
                 )
             }
-            cursor = end
         }
         return segments
     }
