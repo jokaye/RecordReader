@@ -34,17 +34,30 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
         }
 
         func presentIfNeeded(for mode: ImportMode?) {
-            guard let mode else {
-                return
-            }
-            guard !isPresenting, hostController.presentedViewController == nil else {
-                return
-            }
-            guard hostController.viewIfLoaded?.window != nil else {
+            guard let mode, !isPresenting else {
                 return
             }
 
             isPresenting = true
+            present(mode: mode, attempt: 0)
+        }
+
+        private func present(mode: ImportMode, attempt: Int) {
+            guard let presenter = Self.topViewController(),
+                  presenter.presentedViewController == nil else {
+                // The hosting view controller may not be in the window yet on the
+                // first layout pass; retry briefly instead of silently no-oping.
+                guard attempt < 10 else {
+                    isPresenting = false
+                    parent.mode = nil
+                    return
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.present(mode: mode, attempt: attempt + 1)
+                }
+                return
+            }
+
             let picker = UIDocumentPickerViewController(
                 forOpeningContentTypes: mode.allowedContentTypes,
                 asCopy: false
@@ -53,7 +66,21 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
             picker.shouldShowFileExtensions = true
             picker.delegate = self
             picker.presentationController?.delegate = self
-            hostController.present(picker, animated: true)
+            presenter.present(picker, animated: true)
+        }
+
+        private static func topViewController() -> UIViewController? {
+            let windowScene = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first { $0.activationState == .foregroundActive }
+                ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+            let keyWindow = windowScene?.windows.first { $0.isKeyWindow }
+                ?? windowScene?.windows.first
+            var top = keyWindow?.rootViewController
+            while let presented = top?.presentedViewController {
+                top = presented
+            }
+            return top
         }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
