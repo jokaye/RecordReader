@@ -9,9 +9,6 @@ settings:
 packages:
   RecordReader:
     path: .
-  ArgmaxOSS:
-    url: https://github.com/argmaxinc/argmax-oss-swift
-    from: "0.9.0"
 targets:
   RecordReader:
     type: application
@@ -21,11 +18,18 @@ targets:
     dependencies:
       - package: RecordReader
         product: RecordReaderCore
-      - package: ArgmaxOSS
-        product: WhisperKit
+      - framework: .build/sherpa-onnx-ios/build-ios/sherpa-onnx.xcframework
+        embed: false
+      - framework: .build/sherpa-onnx-ios/build-ios/ios-onnxruntime/onnxruntime.xcframework
+        embed: false
     settings:
       GENERATE_INFOPLIST_FILE: YES
       SWIFT_VERSION: "5.9"
+      SWIFT_OBJC_BRIDGING_HEADER: App/RecordReader/SherpaOnnx/SherpaOnnx-Bridging-Header.h
+      OTHER_LDFLAGS: "$(inherited) -lc++"
+      HEADER_SEARCH_PATHS:
+        - "$(SRCROOT)/.build/sherpa-onnx-ios/build-ios/sherpa-onnx.xcframework/ios-arm64/Headers"
+        - "$(SRCROOT)/.build/sherpa-onnx-ios/build-ios/sherpa-onnx.xcframework/ios-arm64_x86_64-simulator/Headers"
       PRODUCT_BUNDLE_IDENTIFIER: com.recordreader.app
       TARGETED_DEVICE_FAMILY: "1"
       INFOPLIST_KEY_CFBundleDisplayName: RecordReader

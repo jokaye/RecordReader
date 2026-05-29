@@ -26,6 +26,9 @@ jobs:
       - name: Run core tests
         run: swift test
 
+      - name: Prepare sherpa-onnx iOS assets
+        run: scripts/prepare-sherpa-onnx-ios.sh
+
       - name: Generate Xcode project
         run: xcodegen generate
 

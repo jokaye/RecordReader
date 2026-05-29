@@ -532,3 +532,44 @@ Cloud result:
 Remaining manual gate:
 
 - On a real iPhone: recognize a Chinese clip; expect a one-time model download on first use, then WhisperKit-generated subtitles. Force-failure (airplane mode before first download) should fall back to iOS Speech.
+
+### 2026-05-29 M17: sherpa-onnx Paraformer Chinese On-Device Subtitle Engine
+
+Status: implemented locally; cloud verification pending.
+
+User direction:
+
+- Use the mature on-device `sherpa-onnx` path.
+- Select Paraformer Chinese int8 as the first model.
+- Keep Apple Speech as fallback.
+
+Implementation:
+
+- Added `App/RecordReader/SherpaOnnx/SherpaOnnx.swift` from the upstream sherpa-onnx Swift C-API wrapper and `SherpaOnnx-Bridging-Header.h`.
+- Added `App/RecordReader/SherpaOnnxTranscriber.swift`, an actor that validates bundled model files, decodes selected MP3/M4A/WAV-style audio files to 16 kHz mono Float PCM with AVFoundation, runs Silero VAD, recognizes each speech segment with sherpa-onnx Paraformer, and maps results to `SubtitleSegment`.
+- Updated `AudioLibraryViewModel.recognizeSubtitleForSelectedRecording()` to run sherpa-onnx first and call the existing `SpeechTranscriber` only as Apple Speech fallback. If both fail, the final error message includes both failures.
+- Removed the app-target WhisperKit dependency and deleted `WhisperKitTranscriber.swift`.
+- Added `scripts/prepare-sherpa-onnx-ios.sh` to download sherpa-onnx iOS xcframeworks, the Paraformer Chinese int8 model, and `silero_vad.onnx`.
+- Added `.gitignore` rules so large model binaries are not committed, while cloud builds still bundle them into the IPA.
+- Updated README, device validation notes, and the M17 design spec.
+
+Engine boundary:
+
+- Recognition reads the selected audio file directly.
+- No microphone, speaker, or headphone output path is used.
+- The first cloud-built IPA with this change is expected to be much larger than prior IPA builds because the 232 MB Paraformer int8 model is bundled for offline recognition.
+
+Local verification:
+
+- `scripts/prepare-sherpa-onnx-ios.sh` completed and produced the iOS xcframeworks plus model resources.
+- `xcodegen generate` passed and generated framework/resource references.
+- `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+- `xcodebuild` remains blocked locally because only Command Line Tools are selected, not full Xcode.
+
+Cloud verification:
+
+- Pending after push.
+
+Remaining manual gate:
+
+- On a real iPhone: install the new IPA, import MP3/M4A/iOS recording files, verify playback, run subtitle recognition offline, and confirm Apple Speech permission appears only if sherpa-onnx fails and fallback is triggered.

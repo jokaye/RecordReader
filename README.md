@@ -1,6 +1,6 @@
 # RecordReader
 
-RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选择的录音文件夹，播放本地音频，保存收藏和分类，并使用 WhisperKit（设备端 Whisper / Core ML）为选中的录音生成高精度中文字幕片段，识别失败时回退到 iOS 原生语音识别。
+RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选择的录音文件夹，播放本地音频，保存收藏和分类，并使用 sherpa-onnx Paraformer 中文 int8 模型在端上为选中的录音生成中文字幕片段，识别失败时回退到 iOS 原生语音识别。
 
 ## v1 范围
 
@@ -16,8 +16,8 @@ RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选
 - 搜索标题、分类和格式。
 - 按名称、修改时间、文件大小和格式排序。
 - 批量收藏、取消收藏、设置分类、清除分类。
-- 使用 WhisperKit（设备端 Whisper / Core ML，`large-v3` 中文模型）从所选音频文件本身生成中文字幕，不采集麦克风或设备外放声音；WhisperKit 不可用时回退到 iOS Speech。
-- 首次识别时自动从 Hugging Face 下载 Whisper 模型并缓存到设备，之后完全离线运行。
+- 使用 sherpa-onnx Paraformer 中文 int8 模型从所选音频文件本身生成中文字幕，不采集麦克风或设备外放声音；本地模型不可用时回退到 iOS Speech。
+- sherpa-onnx iOS 库和中文模型由 `scripts/prepare-sherpa-onnx-ios.sh` 准备，云编译会把模型打入 IPA，端上识别不依赖网络。
 - 用本地 JSON 持久化元数据。
 - 通过 GitHub Actions + XcodeGen 云编译。
 
@@ -35,6 +35,7 @@ The workflow runs:
 
 ```bash
 swift test
+scripts/prepare-sherpa-onnx-ios.sh
 xcodegen generate
 xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
@@ -46,6 +47,7 @@ xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'ge
 ```bash
 brew install xcodegen
 swift test
+scripts/prepare-sherpa-onnx-ios.sh
 xcodegen generate
 xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
@@ -54,4 +56,4 @@ xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'ge
 
 从 `docs/superpowers/milestones.md` 开始。它记录已完成 milestone、本地环境阻塞和下一步云端验证 checkpoint。
 
-真机验证步骤见 `docs/device-validation.md`。字幕由 App 通过 iOS Speech 读取所选音频文件生成，不需要用户提供字幕文件，也不依赖扬声器、耳机或麦克风输入。
+真机验证步骤见 `docs/device-validation.md`。字幕由 App 读取所选音频文件生成，优先使用端上 sherpa-onnx 中文模型，不需要用户提供字幕文件，也不依赖扬声器、耳机或麦克风输入。

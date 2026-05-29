@@ -17,7 +17,7 @@ final class AudioLibraryViewModel: ObservableObject {
     private let scanner: RecordingLibraryScanner
     private let store: RecordingMetadataStore
     private let transcriber: SpeechTranscriber
-    private let whisperTranscriber: WhisperKitTranscriber
+    private let sherpaTranscriber: SherpaOnnxTranscriber
     private var metadata: RecordingLibraryMetadata
     private var selectedSources: [URL] = []
     private var activeSecurityScopedURLs: [URL] = []
@@ -26,12 +26,12 @@ final class AudioLibraryViewModel: ObservableObject {
         scanner: RecordingLibraryScanner = RecordingLibraryScanner(),
         store: RecordingMetadataStore = RecordingMetadataStore(fileURL: AppPaths.metadataURL),
         transcriber: SpeechTranscriber = SpeechTranscriber(),
-        whisperTranscriber: WhisperKitTranscriber = WhisperKitTranscriber()
+        sherpaTranscriber: SherpaOnnxTranscriber = SherpaOnnxTranscriber()
     ) {
         self.scanner = scanner
         self.store = store
         self.transcriber = transcriber
-        self.whisperTranscriber = whisperTranscriber
+        self.sherpaTranscriber = sherpaTranscriber
         do {
             self.metadata = try store.load()
         } catch {
@@ -226,16 +226,16 @@ final class AudioLibraryViewModel: ObservableObject {
             SubtitleDocument(status: .recognizing, segments: [], errorMessage: nil),
             for: id
         )
-        statusMessage = "正在用 WhisperKit 识别字幕（首次使用需下载模型）…"
-        DebugLog.shared.log("开始 WhisperKit 识别：\(url.lastPathComponent)")
+        statusMessage = "正在用本地中文模型识别字幕…"
+        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)")
 
         Task { [weak self] in
             guard let self else {
                 return
             }
             do {
-                let segments = try await self.whisperTranscriber.transcribe(url: url)
-                DebugLog.shared.log("WhisperKit 完成：\(segments.count) 段字幕")
+                let segments = try await self.sherpaTranscriber.transcribe(url: url)
+                DebugLog.shared.log("sherpa-onnx 完成：\(segments.count) 段字幕")
                 if segments.isEmpty {
                     self.setSubtitle(
                         SubtitleDocument(status: .failed, segments: [], errorMessage: "没有从这段音频中识别到语音。"),
@@ -247,17 +247,17 @@ final class AudioLibraryViewModel: ObservableObject {
                         SubtitleDocument(status: .ready, segments: segments, errorMessage: nil),
                         for: id
                     )
-                    self.statusMessage = "字幕已生成（WhisperKit）"
+                    self.statusMessage = "字幕已生成（本地中文模型）"
                 }
             } catch {
-                DebugLog.shared.log("WhisperKit 失败：\(error.localizedDescription)，回退到 iOS Speech")
-                self.statusMessage = "WhisperKit 不可用，改用 iOS 语音识别…"
-                self.recognizeWithAppleSpeech(url: url, id: id)
+                DebugLog.shared.log("sherpa-onnx 失败：\(error.localizedDescription)，回退到 iOS Speech")
+                self.statusMessage = "本地中文模型不可用，改用 iOS 语音识别…"
+                self.recognizeWithAppleSpeech(url: url, id: id, primaryError: error)
             }
         }
     }
 
-    private func recognizeWithAppleSpeech(url: URL, id: Recording.ID) {
+    private func recognizeWithAppleSpeech(url: URL, id: Recording.ID, primaryError: Error? = nil) {
         transcriber.transcribe(url: url) { [weak self] result in
             Task { @MainActor in
                 guard let self else {
@@ -268,11 +268,17 @@ final class AudioLibraryViewModel: ObservableObject {
                     self.setSubtitle(subtitle, for: id)
                     self.statusMessage = "字幕已生成（iOS Speech）"
                 case .failure(let error):
+                    let message: String
+                    if let primaryError {
+                        message = "本地中文识别失败：\(primaryError.localizedDescription)\n\niOS 语音识别兜底也失败：\(error.localizedDescription)"
+                    } else {
+                        message = error.localizedDescription
+                    }
                     self.setSubtitle(
-                        SubtitleDocument(status: .failed, segments: [], errorMessage: error.localizedDescription),
+                        SubtitleDocument(status: .failed, segments: [], errorMessage: message),
                         for: id
                     )
-                    self.errorMessage = error.localizedDescription
+                    self.errorMessage = message
                 }
             }
         }
