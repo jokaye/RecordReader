@@ -17,6 +17,7 @@ final class AudioLibraryViewModel: ObservableObject {
     private let scanner: RecordingLibraryScanner
     private let store: RecordingMetadataStore
     private let transcriber: SpeechTranscriber
+    private let whisperTranscriber: WhisperKitTranscriber
     private var metadata: RecordingLibraryMetadata
     private var selectedSources: [URL] = []
     private var activeSecurityScopedURLs: [URL] = []
@@ -24,11 +25,13 @@ final class AudioLibraryViewModel: ObservableObject {
     init(
         scanner: RecordingLibraryScanner = RecordingLibraryScanner(),
         store: RecordingMetadataStore = RecordingMetadataStore(fileURL: AppPaths.metadataURL),
-        transcriber: SpeechTranscriber = SpeechTranscriber()
+        transcriber: SpeechTranscriber = SpeechTranscriber(),
+        whisperTranscriber: WhisperKitTranscriber = WhisperKitTranscriber()
     ) {
         self.scanner = scanner
         self.store = store
         self.transcriber = transcriber
+        self.whisperTranscriber = whisperTranscriber
         do {
             self.metadata = try store.load()
         } catch {
@@ -217,22 +220,57 @@ final class AudioLibraryViewModel: ObservableObject {
             errorMessage = "请先选择一段录音，再识别字幕。"
             return
         }
+        let id = selectedRecording.id
+        let url = selectedRecording.url
         setSubtitle(
             SubtitleDocument(status: .recognizing, segments: [], errorMessage: nil),
-            for: selectedRecording.id
+            for: id
         )
-        transcriber.transcribe(url: selectedRecording.url) { [weak self] result in
+        statusMessage = "正在用 WhisperKit 识别字幕（首次使用需下载模型）…"
+        DebugLog.shared.log("开始 WhisperKit 识别：\(url.lastPathComponent)")
+
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+            do {
+                let segments = try await self.whisperTranscriber.transcribe(url: url)
+                DebugLog.shared.log("WhisperKit 完成：\(segments.count) 段字幕")
+                if segments.isEmpty {
+                    self.setSubtitle(
+                        SubtitleDocument(status: .failed, segments: [], errorMessage: "没有从这段音频中识别到语音。"),
+                        for: id
+                    )
+                    self.statusMessage = "未识别到语音"
+                } else {
+                    self.setSubtitle(
+                        SubtitleDocument(status: .ready, segments: segments, errorMessage: nil),
+                        for: id
+                    )
+                    self.statusMessage = "字幕已生成（WhisperKit）"
+                }
+            } catch {
+                DebugLog.shared.log("WhisperKit 失败：\(error.localizedDescription)，回退到 iOS Speech")
+                self.statusMessage = "WhisperKit 不可用，改用 iOS 语音识别…"
+                self.recognizeWithAppleSpeech(url: url, id: id)
+            }
+        }
+    }
+
+    private func recognizeWithAppleSpeech(url: URL, id: Recording.ID) {
+        transcriber.transcribe(url: url) { [weak self] result in
             Task { @MainActor in
                 guard let self else {
                     return
                 }
                 switch result {
                 case .success(let subtitle):
-                    self.setSubtitle(subtitle, for: selectedRecording.id)
+                    self.setSubtitle(subtitle, for: id)
+                    self.statusMessage = "字幕已生成（iOS Speech）"
                 case .failure(let error):
                     self.setSubtitle(
                         SubtitleDocument(status: .failed, segments: [], errorMessage: error.localizedDescription),
-                        for: selectedRecording.id
+                        for: id
                     )
                     self.errorMessage = error.localizedDescription
                 }

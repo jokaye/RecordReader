@@ -501,3 +501,29 @@ Cloud result:
 Remaining manual gate:
 
 - On a real iPhone, recognize subtitles while wearing headphones or without playing the audio. The expected behavior is that recognition uses the selected audio file content and does not depend on device output.
+
+### 2026-05-29 M16: WhisperKit On-Device Subtitle Engine
+
+Status: implemented locally; cloud verification pending.
+
+User direction:
+
+- Replace the Apple Speech subtitle solution with the recommended WhisperKit engine for higher Chinese recognition accuracy.
+
+Implementation:
+
+- Added `App/RecordReader/WhisperKitTranscriber.swift`, an `actor` that lazily loads `WhisperKit(WhisperKitConfig(model: "large-v3-v20240930_626MB"))` and transcribes the selected file via `transcribe(audioPath:decodeOptions:)` with `DecodingOptions(task: .transcribe, language: "zh", wordTimestamps: true, chunkingStrategy: .vad)`. Each `TranscriptionSegment` (`start`/`end`/`text`) maps to a `SubtitleSegment`.
+- It reads the selected audio file directly (wrapped in security-scoped access). No microphone or speaker capture.
+- `AudioLibraryViewModel.recognizeSubtitleForSelectedRecording()` now runs WhisperKit first and falls back to the existing `SpeechTranscriber` (iOS Speech) if WhisperKit init/transcription throws (e.g. offline before the model is cached).
+- Added the `argmax-oss-swift` package (product `WhisperKit`, `from: 0.9.0`) to `project.yml`. The Whisper model is downloaded at runtime from Hugging Face and cached, so the model is not bundled in the IPA.
+- `RecordReaderCore` (the SPM package run by `swift test`) does not depend on WhisperKit, so unit tests stay lightweight.
+
+Engine boundary:
+
+- WhisperKit is only added to the app target via XcodeGen; `Package.swift` is unchanged.
+- WhisperKit requires Xcode 16 to build, which the `macos-latest` CI runner provides.
+
+Verification planned:
+
+- Cloud-verify the full `iOS` workflow (build time is longer because WhisperKit + swift-transformers compile from source), then download the latest IPA to `.build/github-artifacts/RecordReader-unsigned.ipa`.
+- On a real iPhone: recognize a Chinese clip; expect a one-time model download on first use, then WhisperKit-generated subtitles. Force-failure (airplane mode before first download) should fall back to iOS Speech.

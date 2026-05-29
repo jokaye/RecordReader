@@ -1,6 +1,6 @@
 # RecordReader
 
-RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选择的录音文件夹，播放本地音频，保存收藏和分类，并使用 iOS 原生中文语音识别为选中的录音生成字幕片段。
+RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选择的录音文件夹，播放本地音频，保存收藏和分类，并使用 WhisperKit（设备端 Whisper / Core ML）为选中的录音生成高精度中文字幕片段，识别失败时回退到 iOS 原生语音识别。
 
 ## v1 范围
 
@@ -16,11 +16,12 @@ RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选
 - 搜索标题、分类和格式。
 - 按名称、修改时间、文件大小和格式排序。
 - 批量收藏、取消收藏、设置分类、清除分类。
-- 使用 iOS Speech 从所选音频文件本身生成中文字幕，不采集麦克风或设备外放声音。
+- 使用 WhisperKit（设备端 Whisper / Core ML，`large-v3` 中文模型）从所选音频文件本身生成中文字幕，不采集麦克风或设备外放声音；WhisperKit 不可用时回退到 iOS Speech。
+- 首次识别时自动从 Hugging Face 下载 Whisper 模型并缓存到设备，之后完全离线运行。
 - 用本地 JSON 持久化元数据。
 - 通过 GitHub Actions + XcodeGen 云编译。
 
-明确不做：SmartSub 集成、Whisper/Core ML 模型管理、翻译、批处理、SRT/VTT 导出、桌面端、iPad 专门布局、同步。
+明确不做：SmartSub 集成、翻译、批处理、SRT/VTT 导出、桌面端、iPad 专门布局、同步。
 
 ## 云编译
 
