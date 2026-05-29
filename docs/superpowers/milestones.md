@@ -535,7 +535,7 @@ Remaining manual gate:
 
 ### 2026-05-29 M17: sherpa-onnx Paraformer Chinese On-Device Subtitle Engine
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud verified.
 
 User direction:
 
@@ -646,4 +646,8 @@ Local verification:
 
 Cloud verification:
 
-- Pending after push.
+- Commit `70045c1` passed the `iOS` workflow and moved `latest-unsigned-ipa` to `70045c1`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-29 18:04:00 +0800`.
+- Local downloaded IPA digest: `sha256:ea65c1f5eea4e1500bbc9d17bd6465d458d75766a4433183ffdcc9d95f2da578`.
+- Unzipped IPA still contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` contains `NSSpeechRecognitionUsageDescription` and does not contain `NSMicrophoneUsageDescription`.
