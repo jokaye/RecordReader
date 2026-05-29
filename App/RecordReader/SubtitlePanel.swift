@@ -10,6 +10,7 @@ struct SubtitlePanel: View {
             HStack {
                 Label(statusTitle, systemImage: statusIcon)
                     .font(.headline.weight(.semibold))
+                    .foregroundStyle(statusColor)
                 Spacer()
                 Text(recording.fileExtension.uppercased())
                     .font(.caption.monospaced())
@@ -28,17 +29,27 @@ struct SubtitlePanel: View {
                                     .font(.body.weight(.medium))
                                     .lineSpacing(4)
                             }
+                            .padding(.vertical, 2)
+                            .transition(.opacity)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
                 Spacer()
-                Text(statusMessage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.76))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 12) {
+                    if status == .recognizing {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(1.08)
+                    }
+                    Text(statusMessage)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.76))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 Spacer()
             }
 
@@ -46,6 +57,8 @@ struct SubtitlePanel: View {
                 Text(errorMessage)
                     .font(.footnote)
                     .foregroundStyle(.red.opacity(0.9))
+                    .padding(.top, 2)
+                    .transition(.opacity)
             }
         }
         .padding(22)
@@ -55,8 +68,10 @@ struct SubtitlePanel: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(statusColor.opacity(status == .failed ? 0.34 : 0.12), lineWidth: 1)
         )
+        .animation(.easeOut(duration: 0.22), value: status)
+        .animation(.easeOut(duration: 0.22), value: recording.subtitle?.segments.count ?? 0)
     }
 
     private var status: SubtitleStatus {
@@ -86,6 +101,19 @@ struct SubtitlePanel: View {
             return "checkmark.bubble"
         case .failed:
             return "exclamationmark.triangle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch status {
+        case .notStarted:
+            return .white.opacity(0.82)
+        case .recognizing:
+            return .white.opacity(0.9)
+        case .ready:
+            return .green.opacity(0.82)
+        case .failed:
+            return .red.opacity(0.88)
         }
     }
 

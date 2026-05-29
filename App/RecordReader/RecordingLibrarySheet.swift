@@ -23,6 +23,7 @@ struct RecordingLibrarySheet: View {
                 Section {
                     ForEach(library.visibleRecordings) { recording in
                         recordingRow(recording)
+                            .listRowBackground(rowBackground(for: recording))
                     }
                 } header: {
                     Text(library.currentFilterTitle)
@@ -33,6 +34,7 @@ struct RecordingLibrarySheet: View {
             .safeAreaInset(edge: .bottom) {
                 if isBatchMode {
                     batchToolbar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .alert("批量设置分类", isPresented: $isBatchCategoryPresented) {
@@ -50,10 +52,12 @@ struct RecordingLibrarySheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(isBatchMode ? "完成" : "选择") {
-                        if isBatchMode {
-                            finishBatchMode()
-                        } else {
-                            isBatchMode = true
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            if isBatchMode {
+                                finishBatchMode()
+                            } else {
+                                isBatchMode = true
+                            }
                         }
                     }
                 }
@@ -83,10 +87,15 @@ struct RecordingLibrarySheet: View {
                     }
                 }
             }
+            .animation(.easeOut(duration: 0.18), value: isBatchMode)
+            .animation(.easeOut(duration: 0.18), value: selectedIDs)
         }
     }
 
     private func recordingRow(_ recording: Recording) -> some View {
+        let isSelected = library.selectedRecording?.id == recording.id
+        let isChecked = selectedIDs.contains(recording.id)
+
         Button {
             if isBatchMode {
                 toggleSelection(recording.id)
@@ -96,11 +105,12 @@ struct RecordingLibrarySheet: View {
         } label: {
             HStack(spacing: 12) {
                 if isBatchMode {
-                    Image(systemName: selectedIDs.contains(recording.id) ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selectedIDs.contains(recording.id) ? Color.accentColor : Color.secondary)
+                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isChecked ? Color.accentColor : Color.secondary)
                         .frame(width: 24)
+                        .symbolEffect(.bounce, value: isChecked)
                 } else {
-                    Image(systemName: recording.isFavorite ? "heart.fill" : "waveform")
+                    Image(systemName: isSelected ? "play.circle.fill" : (recording.isFavorite ? "heart.fill" : "waveform"))
                         .foregroundStyle(recording.isFavorite ? .red : .secondary)
                         .frame(width: 24)
                 }
@@ -120,62 +130,84 @@ struct RecordingLibrarySheet: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
     }
 
     private var batchToolbar: some View {
-        HStack {
-            Button {
-                library.setFavorite(true, ids: selectedIDs)
-                finishBatchMode()
-            } label: {
-                Label("收藏", systemImage: "heart.fill")
-            }
+        VStack(spacing: 10) {
+            Text(selectedIDs.isEmpty ? "选择要批量管理的录音" : "已选择 \(selectedIDs.count) 段录音")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
 
-            Spacer()
+            HStack {
+                Button {
+                    library.setFavorite(true, ids: selectedIDs)
+                    finishBatchMode()
+                } label: {
+                    Label("收藏", systemImage: "heart.fill")
+                }
 
-            Button {
-                library.setFavorite(false, ids: selectedIDs)
-                finishBatchMode()
-            } label: {
-                Label("取消", systemImage: "heart")
-            }
+                Spacer()
 
-            Spacer()
+                Button {
+                    library.setFavorite(false, ids: selectedIDs)
+                    finishBatchMode()
+                } label: {
+                    Label("取消", systemImage: "heart")
+                }
 
-            Button {
-                batchCategory = ""
-                isBatchCategoryPresented = true
-            } label: {
-                Label("分类", systemImage: "tag")
+                Spacer()
+
+                Button {
+                    batchCategory = ""
+                    isBatchCategoryPresented = true
+                } label: {
+                    Label("分类", systemImage: "tag")
+                }
             }
         }
         .font(.callout.weight(.semibold))
         .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(.bar)
         .disabled(selectedIDs.isEmpty)
+        .opacity(selectedIDs.isEmpty ? 0.58 : 1)
     }
 
     private func filterButton(_ filter: RecordingFilter, title: String, systemImage: String) -> some View {
         Button {
-            library.setFilter(filter)
-            selectedIDs = []
+            withAnimation(.easeOut(duration: 0.18)) {
+                library.setFilter(filter)
+                selectedIDs = []
+            }
         } label: {
             Label(title, systemImage: systemImage)
         }
     }
 
+    private func rowBackground(for recording: Recording) -> Color {
+        guard library.selectedRecording?.id == recording.id else {
+            return Color.clear
+        }
+        return Color.accentColor.opacity(0.12)
+    }
+
     private func toggleSelection(_ id: Recording.ID) {
-        if selectedIDs.contains(id) {
-            selectedIDs.remove(id)
-        } else {
-            selectedIDs.insert(id)
+        withAnimation(.easeOut(duration: 0.16)) {
+            if selectedIDs.contains(id) {
+                selectedIDs.remove(id)
+            } else {
+                selectedIDs.insert(id)
+            }
         }
     }
 
     private func finishBatchMode() {
-        selectedIDs = []
-        isBatchMode = false
+        withAnimation(.easeOut(duration: 0.18)) {
+            selectedIDs = []
+            isBatchMode = false
+        }
     }
 }

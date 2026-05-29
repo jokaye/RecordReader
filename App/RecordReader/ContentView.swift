@@ -21,10 +21,8 @@ struct ContentView: View {
                     header
 
                     if let statusMessage = library.statusMessage {
-                        Text(statusMessage)
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        statusCapsule(statusMessage)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
                     if let recording = library.selectedRecording {
@@ -43,6 +41,8 @@ struct ContentView: View {
                 .padding(.vertical, 18)
                 .frame(maxWidth: 430, maxHeight: .infinity)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeOut(duration: 0.2), value: library.statusMessage)
+                .animation(.easeOut(duration: 0.22), value: library.selectedRecording?.id)
             }
         }
         .foregroundStyle(.white)
@@ -130,7 +130,32 @@ struct ContentView: View {
             }
             .accessibilityLabel("显示录音列表")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(IconPressButtonStyle())
+    }
+
+    private func statusCapsule(_ message: String) -> some View {
+        Label(message, systemImage: statusIcon(for: message))
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.82))
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.white.opacity(0.08), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            )
+    }
+
+    private func statusIcon(for message: String) -> String {
+        if message.contains("失败") || message.contains("错误") || message.contains("不可用") {
+            return "exclamationmark.triangle"
+        }
+        if message.contains("识别") || message.contains("扫描") {
+            return "waveform.badge.magnifyingglass"
+        }
+        return "checkmark.circle"
     }
 
     private func playerContent(_ recording: Recording, subtitlePanelHeight: CGFloat) -> some View {
@@ -138,6 +163,7 @@ struct ContentView: View {
             SubtitlePanel(recording: recording, errorMessage: library.errorMessage)
                 .frame(maxWidth: .infinity)
                 .frame(height: subtitlePanelHeight)
+                .id(recording.id)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 14) {
@@ -155,12 +181,16 @@ struct ContentView: View {
                     Spacer()
 
                     Button {
-                        library.toggleFavorite()
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            library.toggleFavorite()
+                        }
                     } label: {
                         Image(systemName: recording.isFavorite ? "heart.fill" : "heart")
                             .font(.title2.weight(.bold))
                             .foregroundStyle(recording.isFavorite ? .white : .white.opacity(0.72))
+                            .symbolEffect(.bounce, value: recording.isFavorite)
                     }
+                    .buttonStyle(IconPressButtonStyle())
                     .accessibilityLabel(recording.isFavorite ? "取消收藏" : "收藏录音")
 
                     Menu {
@@ -175,6 +205,7 @@ struct ContentView: View {
                         Image(systemName: "ellipsis")
                             .font(.title2.weight(.bold))
                     }
+                    .buttonStyle(IconPressButtonStyle())
                     .accessibilityLabel("更多操作")
                 }
 
@@ -205,7 +236,7 @@ struct ContentView: View {
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ScalePressButtonStyle())
                     .accessibilityLabel("播放速度 \(player.speed.label)")
                     Spacer()
                     Text(player.durationLabel)
@@ -217,7 +248,9 @@ struct ContentView: View {
             HStack(spacing: 24) {
                 Button {
                     let wasPlaying = player.isPlaying
-                    if let previous = library.selectPrevious() {
+                    if let previous = withAnimation(.easeOut(duration: 0.2), {
+                        library.selectPrevious()
+                    }) {
                         player.load(url: previous.url)
                         if wasPlaying {
                             player.play()
@@ -227,6 +260,7 @@ struct ContentView: View {
                     Image(systemName: "backward.end.fill")
                 }
                 .disabled(!library.hasPreviousRecording)
+                .opacity(library.hasPreviousRecording ? 1 : 0.35)
                 .accessibilityLabel("上一首")
 
                 Button {
@@ -245,6 +279,7 @@ struct ContentView: View {
                         .background(.white)
                         .clipShape(Circle())
                 }
+                .buttonStyle(PlayPressButtonStyle())
                 .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
 
                 Button {
@@ -255,7 +290,9 @@ struct ContentView: View {
 
                 Button {
                     let wasPlaying = player.isPlaying
-                    if let next = library.selectNext() {
+                    if let next = withAnimation(.easeOut(duration: 0.2), {
+                        library.selectNext()
+                    }) {
                         player.load(url: next.url)
                         if wasPlaying {
                             player.play()
@@ -265,16 +302,18 @@ struct ContentView: View {
                     Image(systemName: "forward.end.fill")
                 }
                 .disabled(!library.hasNextRecording)
+                .opacity(library.hasNextRecording ? 1 : 0.35)
                 .accessibilityLabel("下一首")
             }
             .font(.title.weight(.semibold))
-            .buttonStyle(.plain)
+            .buttonStyle(ControlPressButtonStyle())
 
             if let playbackError = player.errorMessage {
                 Text(playbackError)
                     .font(.footnote)
                     .foregroundStyle(.red.opacity(0.9))
                     .multilineTextAlignment(.center)
+                    .transition(.opacity)
             }
         }
     }
@@ -309,25 +348,15 @@ struct ContentView: View {
                     presentImporter(.folder)
                 } label: {
                     Label("选择文件夹", systemImage: "folder.badge.plus")
-                        .font(.headline)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .background(.white)
-                        .foregroundStyle(.black)
-                        .clipShape(Capsule())
                 }
+                .buttonStyle(FilledCapsuleButtonStyle())
 
                 Button {
                     presentImporter(.audio)
                 } label: {
                     Label("选择音频", systemImage: "waveform.badge.plus")
-                        .font(.headline)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .background(.white.opacity(0.14))
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
                 }
+                .buttonStyle(SecondaryCapsuleButtonStyle())
             }
             Spacer()
         }
@@ -336,18 +365,24 @@ struct ContentView: View {
     private var bottomBar: some View {
         HStack {
             Button {
-                library.setFilter(.all)
+                withAnimation(.easeOut(duration: 0.18)) {
+                    library.setFilter(.all)
+                }
             } label: {
                 Image(systemName: "tray.full")
             }
+            .foregroundStyle(library.filter == .all ? .white : .white.opacity(0.58))
 
             Spacer()
 
             Button {
-                library.setFilter(.favorites)
+                withAnimation(.easeOut(duration: 0.18)) {
+                    library.setFilter(.favorites)
+                }
             } label: {
                 Image(systemName: "heart")
             }
+            .foregroundStyle(library.filter == .favorites ? .white : .white.opacity(0.58))
 
             Spacer()
 
@@ -368,8 +403,7 @@ struct ContentView: View {
             .disabled(library.selectedRecording == nil)
         }
         .font(.title2.weight(.semibold))
-        .buttonStyle(.plain)
-        .foregroundStyle(.white.opacity(0.82))
+        .buttonStyle(IconPressButtonStyle())
     }
 
     private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
@@ -390,6 +424,80 @@ struct ContentView: View {
                 seekDraftProgress = newValue
             }
         )
+    }
+}
+
+private struct IconPressButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(minWidth: 34, minHeight: 34)
+            .contentShape(Rectangle())
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.68 : 0.9) : 0.35)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct ControlPressButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+            .scaleEffect(configuration.isPressed ? 0.88 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 0.92) : 0.35)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct PlayPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .shadow(color: .black.opacity(configuration.isPressed ? 0.12 : 0.24), radius: 18, y: 10)
+            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
+private struct ScalePressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct FilledCapsuleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.white.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
+            .foregroundStyle(.black)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct SecondaryCapsuleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.white.opacity(configuration.isPressed ? 0.2 : 0.14), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            )
+            .foregroundStyle(.white)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
 

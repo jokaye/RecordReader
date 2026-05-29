@@ -651,3 +651,34 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:ea65c1f5eea4e1500bbc9d17bd6465d458d75766a4433183ffdcc9d95f2da578`.
 - Unzipped IPA still contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
 - The downloaded IPA `Info.plist` contains `NSSpeechRecognitionUsageDescription` and does not contain `NSMicrophoneUsageDescription`.
+
+### 2026-05-29 M20: Player UI Interaction Polish
+
+Status: implemented locally; cloud verification pending.
+
+User direction:
+
+- Continue the previously scoped UI polish work.
+- Keep the design direction from the original dark player spec.
+- Make the interaction feel smoother without changing import, playback, or ASR behavior.
+
+Changes:
+
+- Replaced the plain status text with a lightweight capsule that animates in and uses context-aware SF Symbols for scan, recognition, success, and failure states.
+- Added press feedback styles for header icons, transport controls, speed, empty-state import buttons, and the main play button.
+- Added subtle player transitions for selected recording and status changes.
+- Added favorite bounce feedback and clearer previous/next disabled opacity.
+- Improved the subtitle panel with a recognizing `ProgressView`, status coloring, softer subtitle row transitions, and clearer failed-state border emphasis.
+- Improved the recording list with current-recording row highlight, animated batch-mode entry/exit, animated multi-select checkmarks, and selected-count copy in the batch toolbar.
+
+Local verification:
+
+- `xcodegen generate` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud verification:
+
+- Pending after push.
