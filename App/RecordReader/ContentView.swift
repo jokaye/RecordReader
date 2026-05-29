@@ -408,11 +408,23 @@ enum ImportMode: Identifiable {
         case .folder:
             return [.folder]
         case .audio:
-            return [.audio]
+            return [.audio, .mp3, .mpeg4Audio, .wav, .aiff, .item]
         }
     }
 
     var allowsMultipleSelection: Bool {
+        switch self {
+        case .folder:
+            return false
+        case .audio:
+            return true
+        }
+    }
+
+    /// Copy mode (`asCopy: true`) imports a sandbox copy and works without the
+    /// open-in-place entitlements a sideloaded build typically lacks; folders
+    /// must be opened in place.
+    var asCopy: Bool {
         switch self {
         case .folder:
             return false

@@ -62,13 +62,13 @@ struct DocumentPickerPresenter: UIViewControllerRepresentable {
 
             let picker = UIDocumentPickerViewController(
                 forOpeningContentTypes: mode.allowedContentTypes,
-                asCopy: false
+                asCopy: mode.asCopy
             )
             picker.allowsMultipleSelection = mode.allowsMultipleSelection
             picker.shouldShowFileExtensions = true
             picker.delegate = self
             picker.presentationController?.delegate = self
-            DebugLog.shared.log("从 \(type(of: presenter)) 弹出选择器（尝试 \(attempt)）")
+            DebugLog.shared.log("从 \(type(of: presenter)) 弹出选择器（尝试 \(attempt)，asCopy=\(mode.asCopy)）")
             presenter.present(picker, animated: true) {
                 DebugLog.shared.log("选择器已显示")
             }
