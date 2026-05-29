@@ -523,7 +523,12 @@ Engine boundary:
 - WhisperKit is only added to the app target via XcodeGen; `Package.swift` is unchanged.
 - WhisperKit requires Xcode 16 to build, which the `macos-latest` CI runner provides.
 
-Verification planned:
+Cloud result:
 
-- Cloud-verify the full `iOS` workflow (build time is longer because WhisperKit + swift-transformers compile from source), then download the latest IPA to `.build/github-artifacts/RecordReader-unsigned.ipa`.
+- Commit `61c5b24` passed the full `iOS` workflow (build + unsigned device IPA), with WhisperKit + swift-transformers + swift-crypto resolved and compiled from source.
+- The release tag `latest-unsigned-ipa` now points to `61c5b24`.
+- The IPA was downloaded to `.build/github-artifacts/RecordReader-unsigned.ipa` (~1.6 MB). It bundles WhisperKit's transitive resources (`swift-transformers_Hub.bundle`, `swift-crypto_Crypto.bundle`) but not the Whisper model, which downloads at runtime.
+
+Remaining manual gate:
+
 - On a real iPhone: recognize a Chinese clip; expect a one-time model download on first use, then WhisperKit-generated subtitles. Force-failure (airplane mode before first download) should fall back to iOS Speech.
