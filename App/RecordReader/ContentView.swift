@@ -19,6 +19,13 @@ struct ContentView: View {
                 VStack(spacing: 24) {
                     header
 
+                    if let statusMessage = library.statusMessage {
+                        Text(statusMessage)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     if let recording = library.selectedRecording {
                         playerContent(
                             recording,

@@ -9,6 +9,7 @@ final class AudioLibraryViewModel: ObservableObject {
     @Published private(set) var selectedFolder: URL?
     @Published private(set) var filter: RecordingFilter = .all
     @Published private(set) var errorMessage: String?
+    @Published private(set) var statusMessage: String?
     @Published private(set) var isLoading = false
     @Published var searchText = ""
     @Published var sort: RecordingSort = .nameAscending
@@ -86,11 +87,13 @@ final class AudioLibraryViewModel: ObservableObject {
     func selectImportedItems(_ result: Result<[URL], Error>) {
         do {
             let urls = try result.get()
+            statusMessage = "已选择 \(urls.count) 项"
             guard !urls.isEmpty else {
                 throw RecordingSelectionError.noFolderSelected
             }
             open(urls: urls, persistFolderBookmarkIfPossible: true)
         } catch {
+            statusMessage = nil
             errorMessage = error.localizedDescription
         }
     }
@@ -284,10 +287,12 @@ final class AudioLibraryViewModel: ObservableObject {
             } else {
                 selectedRecording = preferredSelectionAfterLoad
             }
+            statusMessage = "扫描到 \(recordings.count) 段录音"
             errorMessage = recordings.isEmpty ? "没有找到支持的录音文件。请选择包含 MP3、M4A、WAV 等音频的文件夹，或直接选择音频文件。" : nil
         } catch {
             recordings = []
             selectedRecording = nil
+            statusMessage = "扫描失败"
             errorMessage = error.localizedDescription
         }
     }

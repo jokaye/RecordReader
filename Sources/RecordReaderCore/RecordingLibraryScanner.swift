@@ -49,9 +49,6 @@ public struct RecordingLibraryScanner {
         guard fileManager.fileExists(atPath: folderPath, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw RecordingLibraryError.folderNotFound(folderPath)
         }
-        guard fileManager.isReadableFile(atPath: folderPath) else {
-            throw RecordingLibraryError.folderUnreadable(folderPath)
-        }
 
         let keys: [URLResourceKey] = [
             .isRegularFileKey,
@@ -59,30 +56,32 @@ public struct RecordingLibraryScanner {
             .contentModificationDateKey,
             .fileSizeKey
         ]
-        let urls = try fileManager.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
-        )
+        let urls: [URL]
+        do {
+            urls = try fileManager.contentsOfDirectory(
+                at: folder,
+                includingPropertiesForKeys: keys,
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            // POSIX readability checks are unreliable for security-scoped URLs
+            // returned by the iOS file picker, so surface real enumeration
+            // failures here instead of pre-gating with isReadableFile.
+            throw RecordingLibraryError.folderUnreadable(folderPath)
+        }
 
-        return try recordings(from: urls, metadata: metadata, requireRegularFile: true)
+        return recordings(from: urls, metadata: metadata, requireRegularFile: true)
     }
 
     public func scan(urls: [URL], metadata: RecordingLibraryMetadata) throws -> [Recording] {
         var recordingsByID: [String: Recording] = [:]
 
         for url in urls {
-            var isDirectory: ObjCBool = false
-            let exists = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
-            guard exists else {
-                throw RecordingLibraryError.folderNotFound(url.path)
-            }
-
             let recordings: [Recording]
-            if isDirectory.boolValue {
+            if isDirectory(url) {
                 recordings = try scan(folder: url, metadata: metadata)
             } else {
-                recordings = try self.recordings(from: [url], metadata: metadata, requireRegularFile: false)
+                recordings = self.recordings(from: [url], metadata: metadata, requireRegularFile: false)
             }
 
             for recording in recordings {
@@ -93,11 +92,20 @@ public struct RecordingLibraryScanner {
         return sort(Array(recordingsByID.values))
     }
 
+    private func isDirectory(_ url: URL) -> Bool {
+        if let isDirectory = try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory {
+            return isDirectory
+        }
+        var isDirectory: ObjCBool = false
+        _ = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        return isDirectory.boolValue
+    }
+
     private func recordings(
         from urls: [URL],
         metadata: RecordingLibraryMetadata,
         requireRegularFile: Bool
-    ) throws -> [Recording] {
+    ) -> [Recording] {
         let keys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .creationDateKey,
@@ -105,12 +113,12 @@ public struct RecordingLibraryScanner {
             .fileSizeKey
         ]
 
-        let recordings = try urls.compactMap { url -> Recording? in
-            let values = try url.resourceValues(forKeys: keys)
-            if requireRegularFile, values.isRegularFile != true {
+        let recordings = urls.compactMap { url -> Recording? in
+            let values = try? url.resourceValues(forKeys: keys)
+            if requireRegularFile, values?.isRegularFile != true {
                 return nil
             }
-            if !requireRegularFile, values.isRegularFile == false {
+            if !requireRegularFile, values?.isRegularFile == false {
                 return nil
             }
             let fileExtension = url.pathExtension.lowercased()
@@ -125,9 +133,9 @@ public struct RecordingLibraryScanner {
                 url: url,
                 title: url.deletingPathExtension().lastPathComponent,
                 fileExtension: fileExtension,
-                fileSize: values.fileSize.map(Int64.init),
-                createdAt: values.creationDate,
-                modifiedAt: values.contentModificationDate,
+                fileSize: values?.fileSize.map(Int64.init),
+                createdAt: values?.creationDate,
+                modifiedAt: values?.contentModificationDate,
                 isFavorite: recordMetadata?.isFavorite ?? false,
                 category: recordMetadata?.category,
                 subtitle: recordMetadata?.subtitle
