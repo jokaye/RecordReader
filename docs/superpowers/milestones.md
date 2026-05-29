@@ -504,7 +504,7 @@ Remaining manual gate:
 
 ### 2026-05-29 M16: WhisperKit On-Device Subtitle Engine
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud verified.
 
 User direction:
 
@@ -611,4 +611,8 @@ Local verification:
 
 Cloud verification:
 
-- Pending after push.
+- Commit `20728b0` passed the `iOS` workflow and moved `latest-unsigned-ipa` to `20728b0`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-29 17:53:00 +0800`.
+- Local downloaded IPA digest: `sha256:d6ed767386639f55eabb0f8e0418fcf673ecff6248f5c08a789689b2be0ae3f3`.
+- Unzipped IPA still contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` contains `NSSpeechRecognitionUsageDescription` and does not contain `NSMicrophoneUsageDescription`.
