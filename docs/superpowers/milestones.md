@@ -691,3 +691,48 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:2a6ef0b29c269ecab2ed60ae5a9b5ef6a2bd3fd2a5bf3c4e3b4bb84abcc47e5d`.
 - Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
 - The downloaded IPA `Info.plist` is iPhone-only (`UIDeviceFamily` is `1`), contains `NSSpeechRecognitionUsageDescription`, and does not contain `NSMicrophoneUsageDescription`.
+
+### 2026-05-29 M21: Long Audio Subtitle Coverage Fix
+
+Status: implemented and cloud-verified.
+
+User report:
+
+- A 20-minute recording only produced subtitles for part of the audio.
+- The question was whether the UI was overriding/hiding subtitles or whether recognition missed audio.
+
+Diagnosis:
+
+- `SubtitlePanel` renders every stored `SubtitleSegment` inside a `ScrollView`; no UI-side `prefix`, paging, replacement, or display cap was found.
+- The existing sherpa path decoded the whole selected file, then relied on Silero VAD output as the only recognition input for any file where VAD produced at least one segment.
+- That means VAD-missed audio regions were never sent to Paraformer. For long recordings, this can look like subtitles cover only part of the file even when audio decoding succeeded.
+
+Fix:
+
+- Added `TranscriptionWindowPlanner` in `RecordReaderCore` to plan fixed recognition windows that cover the full sample range without gaps.
+- Added unit tests for fixed-window full coverage and the long-audio threshold.
+- Updated `SherpaOnnxTranscriber` so audio at or above 120 seconds uses fixed 25-second full-coverage windows instead of VAD-only segmentation.
+- Kept VAD for short clips to preserve faster, tighter segmentation.
+- Added debug log entries for decoded audio duration/sample count, fixed window count, VAD result count, and full-coverage result count.
+
+Local verification:
+
+- `xcodegen generate` passed.
+- `swiftc -typecheck Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud verification:
+
+- Commit `b1c73f9` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `b1c73f9`.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26632013985`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-29 18:29:02 +0800`.
+- Local downloaded IPA digest: `sha256:79f5242821c33331bcd32e61b5844808a3d3dfb70ce431f2816f257830526f4b`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` is iPhone-only, contains `NSSpeechRecognitionUsageDescription`, and does not contain `NSMicrophoneUsageDescription`.
+
+Manual follow-up:
+
+- On the same 20-minute file, rerun subtitle recognition and open the in-app debug log. Expected log shape: decoded duration near the real file length, fixed window count around duration / 25 seconds, and a nonzero subtitle count. If decoded duration is much shorter than the file, the remaining issue is AVFoundation decode/input access; if duration and window count are correct but subtitles are still sparse, the remaining issue is model accuracy or empty text returned for specific windows.
