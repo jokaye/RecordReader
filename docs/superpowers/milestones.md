@@ -229,7 +229,7 @@ Follow-up result:
 
 ### 2026-05-28 M9: Direct Audio Import Review
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud verified.
 
 User report:
 
@@ -568,7 +568,13 @@ Local verification:
 
 Cloud verification:
 
-- Pending after push.
+- Commit `fede0b2` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26629830785`
+- Artifact: `RecordReader-unsigned-ipa`, size `222 MB`, digest `sha256:60abeca520a476db855347da2a5cd7ed91836baa128d5d6fa489c42f0d26c84d`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-29 17:39:00 +0800`.
+- Local downloaded IPA digest: `sha256:a02de5991f09e0d24d76de2f29d9845762668110bd54d94fc64460c6b7fb1e49`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` contains `NSSpeechRecognitionUsageDescription` and does not contain `NSMicrophoneUsageDescription`.
 
 Remaining manual gate:
 
