@@ -28,12 +28,6 @@ final class SpeechTranscriber {
         scopedURL = url
         hasSecurityScope = url.startAccessingSecurityScopedResource()
 
-        guard FileManager.default.isReadableFile(atPath: url.path) else {
-            releaseSecurityScope()
-            completion(.failure(SpeechTranscriberError.audioFileUnreadable))
-            return
-        }
-
         SFSpeechRecognizer.requestAuthorization { [weak self] authorizationStatus in
             switch authorizationStatus {
             case .authorized:
@@ -152,7 +146,6 @@ final class SpeechTranscriber {
 }
 
 enum SpeechTranscriberError: Error, LocalizedError {
-    case audioFileUnreadable
     case permissionDenied
     case permissionRestricted
     case permissionNotDetermined
@@ -164,8 +157,6 @@ enum SpeechTranscriberError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .audioFileUnreadable:
-            return "无法读取这个音频文件。请确认文件仍在手机本地、未被移动，并重新选择。"
         case .permissionDenied:
             return "语音识别权限已被拒绝。请到系统设置中允许 RecordReader 使用语音识别。"
         case .permissionRestricted:

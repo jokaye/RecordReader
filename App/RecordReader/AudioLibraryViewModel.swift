@@ -251,7 +251,7 @@ final class AudioLibraryViewModel: ObservableObject {
                 }
             } catch {
                 DebugLog.shared.log("sherpa-onnx 失败：\(error.localizedDescription)，回退到 iOS Speech")
-                self.statusMessage = "本地中文模型不可用，改用 iOS 语音识别…"
+                self.statusMessage = "本地中文识别失败，正在改用 iOS 语音识别…"
                 self.recognizeWithAppleSpeech(url: url, id: id, primaryError: error)
             }
         }
@@ -333,7 +333,7 @@ final class AudioLibraryViewModel: ObservableObject {
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             let ext = url.pathExtension.lowercased()
             let reachable = FileManager.default.isReadableFile(atPath: url.path)
-            DebugLog.shared.log("  来源 \(url.lastPathComponent) 目录=\(isDir) 扩展名=\(ext.isEmpty ? "无" : ext) 可读=\(reachable)")
+            DebugLog.shared.log("  来源 \(url.lastPathComponent) 目录=\(isDir) 扩展名=\(ext.isEmpty ? "无" : ext) POSIX可读=\(reachable)")
         }
         do {
             recordings = try scanner.scan(urls: urls, metadata: metadata)

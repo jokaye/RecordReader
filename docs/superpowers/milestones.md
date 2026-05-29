@@ -579,3 +579,36 @@ Cloud verification:
 Remaining manual gate:
 
 - On a real iPhone: install the new IPA, import MP3/M4A/iOS recording files, verify playback, run subtitle recognition offline, and confirm Apple Speech permission appears only if sherpa-onnx fails and fallback is triggered.
+
+### 2026-05-29 M18: Security-Scoped Audio Readability Fix for Local ASR
+
+Status: implemented locally; cloud verification pending.
+
+User report:
+
+- The app showed `本地中文模型不可用` after the M17 sherpa-onnx build.
+
+Root cause:
+
+- `SherpaOnnxTranscriber` reintroduced a preflight `FileManager.isReadableFile(atPath:)` check before opening the selected audio file.
+- That POSIX-style readability check is unreliable for iOS document picker and security-scoped file-provider URLs. The scanner had already removed the same pattern earlier and relies on real enumeration/open failures instead.
+- `SpeechTranscriber` had the same preflight check, so the Apple Speech fallback could also fail before the system recognizer got a chance to read the selected file.
+
+Fix:
+
+- Removed `isReadableFile(atPath:)` as a gate from both sherpa-onnx and Apple Speech transcription paths.
+- `SherpaOnnxTranscriber` now lets `AVAudioFile(forReading:)` and `read(into:)` be the real validation point and wraps those failures in a Chinese actionable error.
+- Updated the fallback status copy from `本地中文模型不可用` to `本地中文识别失败，正在改用 iOS 语音识别…`, because the failure may be file access/decoding, not model installation.
+- Kept the import debug log but renamed its field to `POSIX可读` so future debugging does not treat it as an authoritative accessibility signal.
+
+Local verification:
+
+- `xcodegen generate` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud verification:
+
+- Pending after push.

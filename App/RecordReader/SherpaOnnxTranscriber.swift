@@ -19,10 +19,6 @@ actor SherpaOnnxTranscriber {
             }
         }
 
-        guard FileManager.default.isReadableFile(atPath: url.path) else {
-            throw SherpaOnnxTranscriberError.audioFileUnreadable
-        }
-
         let engine = try loadEngine()
         let samples = try decodeAudioFile(url)
         guard !samples.isEmpty else {
@@ -123,7 +119,12 @@ actor SherpaOnnxTranscriber {
     }
 
     private func decodeAudioFile(_ url: URL) throws -> [Float] {
-        let audioFile = try AVAudioFile(forReading: url)
+        let audioFile: AVAudioFile
+        do {
+            audioFile = try AVAudioFile(forReading: url)
+        } catch {
+            throw SherpaOnnxTranscriberError.audioFileUnreadable(error.localizedDescription)
+        }
         guard let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: Double(Self.sampleRate),
@@ -149,7 +150,11 @@ actor SherpaOnnxTranscriber {
             ) else {
                 throw SherpaOnnxTranscriberError.audioConversionFailed("无法分配输入缓冲区。")
             }
-            try audioFile.read(into: inputBuffer, frameCount: inputCapacity)
+            do {
+                try audioFile.read(into: inputBuffer, frameCount: inputCapacity)
+            } catch {
+                throw SherpaOnnxTranscriberError.audioFileUnreadable(error.localizedDescription)
+            }
             if inputBuffer.frameLength == 0 {
                 break
             }
@@ -257,7 +262,7 @@ private struct SherpaOnnxEngine {
 
 enum SherpaOnnxTranscriberError: Error, LocalizedError {
     case missingModelResource(String)
-    case audioFileUnreadable
+    case audioFileUnreadable(String)
     case noDecodableAudio
     case invalidVadWindow
     case audioConversionFailed(String)
@@ -267,8 +272,8 @@ enum SherpaOnnxTranscriberError: Error, LocalizedError {
         switch self {
         case .missingModelResource(let path):
             return "本地中文识别模型缺失：\(path)。请安装包含 sherpa-onnx 中文模型的最新版本。"
-        case .audioFileUnreadable:
-            return "无法读取这个音频文件。请确认文件仍在手机本地、未被移动，并重新选择。"
+        case .audioFileUnreadable(let message):
+            return "无法读取这个音频文件：\(message)。请确认文件仍在手机本地、未被移动，并重新选择。"
         case .noDecodableAudio:
             return "这个文件没有可识别的音频数据。请确认它是有效的 MP3、M4A、WAV 或录音文件。"
         case .invalidVadWindow:
