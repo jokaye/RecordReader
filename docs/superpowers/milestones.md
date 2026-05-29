@@ -582,7 +582,7 @@ Remaining manual gate:
 
 ### 2026-05-29 M18: Security-Scoped Audio Readability Fix for Local ASR
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud-verified.
 
 User report:
 
@@ -619,7 +619,7 @@ Cloud verification:
 
 ### 2026-05-29 M19: AVAssetReader Decode Path for Compressed Audio ASR
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud-verified.
 
 User report:
 
@@ -654,7 +654,7 @@ Cloud verification:
 
 ### 2026-05-29 M20: Player UI Interaction Polish
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud-verified.
 
 User direction:
 
@@ -674,11 +674,20 @@ Changes:
 Local verification:
 
 - `xcodegen generate` passed.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed for the generated core module.
 - `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
 - `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
 - `git diff --check` passed.
+- `swiftc -typecheck` for app target sources remains blocked on this machine because the local CommandLineTools install cannot locate the iOS SDK, so `UIKit` is unavailable.
 - `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
 
 Cloud verification:
 
-- Pending after push.
+- Commit `64f6e0e` failed the `iOS` workflow because SwiftUI `symbolEffect` usage was too aggressive for the current build target.
+- Commit `4d7df99` failed the `iOS` workflow because `recordingRow(_:)` declared `some View` but had local `let` bindings before the `Button`, so the row needed an explicit `return`.
+- Commit `b3dfb51` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `b3dfb51`.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26631677323`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-29 18:21:25 +0800`.
+- Local downloaded IPA digest: `sha256:2a6ef0b29c269ecab2ed60ae5a9b5ef6a2bd3fd2a5bf3c4e3b4bb84abcc47e5d`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` is iPhone-only (`UIDeviceFamily` is `1`), contains `NSSpeechRecognitionUsageDescription`, and does not contain `NSMicrophoneUsageDescription`.
