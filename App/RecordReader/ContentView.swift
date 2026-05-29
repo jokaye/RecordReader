@@ -5,8 +5,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @StateObject private var library = AudioLibraryViewModel()
     @StateObject private var player = PlayerController()
-    @State private var isImporterPresented = false
-    @State private var importMode: ImportMode = .audio
+    @State private var activeImportMode: ImportMode?
     @State private var isLibraryPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
@@ -39,13 +38,11 @@ struct ContentView: View {
             }
         }
         .foregroundStyle(.white)
-        .fileImporter(
-            isPresented: $isImporterPresented,
-            allowedContentTypes: importMode.allowedContentTypes,
-            allowsMultipleSelection: importMode.allowsMultipleSelection
-        ) { result in
-            library.selectImportedItems(result)
-        }
+        .background(
+            DocumentPickerPresenter(mode: $activeImportMode) { urls in
+                library.selectImportedItems(.success(urls))
+            }
+        )
         .sheet(isPresented: $isLibraryPresented) {
             RecordingLibrarySheet(library: library) { recording in
                 library.select(recording)
@@ -360,8 +357,7 @@ struct ContentView: View {
     }
 
     private func presentImporter(_ mode: ImportMode) {
-        importMode = mode
-        isImporterPresented = true
+        activeImportMode = mode
     }
 
     private var seekProgressBinding: Binding<Double> {
@@ -380,9 +376,11 @@ private extension Color {
     static let playerBackground = Color(red: 0.07, green: 0.055, blue: 0.07)
 }
 
-private enum ImportMode {
+enum ImportMode: Identifiable {
     case folder
     case audio
+
+    var id: Self { self }
 
     var allowedContentTypes: [UTType] {
         switch self {
