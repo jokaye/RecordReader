@@ -5,7 +5,6 @@ import RecordReaderCore
 actor SherpaOnnxTranscriber {
     private static let sampleRate = 16_000
     private static let featureDim = 80
-    private static let readFrameCapacity: AVAudioFrameCount = 16_384
 
     private var recognizer: SherpaOnnxOfflineRecognizer?
     private var vad: SherpaOnnxVoiceActivityDetectorWrapper?
@@ -20,7 +19,7 @@ actor SherpaOnnxTranscriber {
         }
 
         let engine = try loadEngine()
-        let samples = try decodeAudioFile(url)
+        let samples = try await decodeAudioFile(url)
         guard !samples.isEmpty else {
             throw SherpaOnnxTranscriberError.noDecodableAudio
         }
@@ -118,95 +117,97 @@ actor SherpaOnnxTranscriber {
         return url
     }
 
-    private func decodeAudioFile(_ url: URL) throws -> [Float] {
-        let audioFile: AVAudioFile
+    private func decodeAudioFile(_ url: URL) async throws -> [Float] {
+        let asset = AVURLAsset(url: url)
+        let tracks: [AVAssetTrack]
         do {
-            audioFile = try AVAudioFile(forReading: url)
+            tracks = try await asset.loadTracks(withMediaType: .audio)
         } catch {
-            throw SherpaOnnxTranscriberError.audioFileUnreadable(error.localizedDescription)
+            throw SherpaOnnxTranscriberError.audioFileUnreadable("无法读取音轨：\(error.localizedDescription)")
         }
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: Double(Self.sampleRate),
-            channels: 1,
-            interleaved: false
-        ) else {
-            throw SherpaOnnxTranscriberError.audioConversionFailed("无法创建 16kHz 单声道 PCM 格式。")
-        }
-        guard let converter = AVAudioConverter(from: audioFile.processingFormat, to: targetFormat) else {
-            throw SherpaOnnxTranscriberError.audioConversionFailed("无法初始化音频格式转换器。")
+        guard let track = tracks.first else {
+            throw SherpaOnnxTranscriberError.noAudioTrack
         }
 
-        var output: [Float] = []
-        let inputCapacity = Self.readFrameCapacity
-        let outputCapacity = AVAudioFrameCount(
-            ceil(Double(inputCapacity) * targetFormat.sampleRate / audioFile.processingFormat.sampleRate)
-        ) + 512
-
-        while true {
-            guard let inputBuffer = AVAudioPCMBuffer(
-                pcmFormat: audioFile.processingFormat,
-                frameCapacity: inputCapacity
-            ) else {
-                throw SherpaOnnxTranscriberError.audioConversionFailed("无法分配输入缓冲区。")
-            }
-            do {
-                try audioFile.read(into: inputBuffer, frameCount: inputCapacity)
-            } catch {
-                throw SherpaOnnxTranscriberError.audioFileUnreadable(error.localizedDescription)
-            }
-            if inputBuffer.frameLength == 0 {
-                break
-            }
-
-            var inputConsumed = false
-            while true {
-                guard let outputBuffer = AVAudioPCMBuffer(
-                    pcmFormat: targetFormat,
-                    frameCapacity: outputCapacity
-                ) else {
-                    throw SherpaOnnxTranscriberError.audioConversionFailed("无法分配输出缓冲区。")
-                }
-
-                var conversionError: NSError?
-                let status = converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
-                    if inputConsumed {
-                        outStatus.pointee = .noDataNow
-                        return nil
-                    }
-                    inputConsumed = true
-                    outStatus.pointee = .haveData
-                    return inputBuffer
-                }
-
-                if let conversionError {
-                    throw SherpaOnnxTranscriberError.audioConversionFailed(conversionError.localizedDescription)
-                }
-                appendSamples(from: outputBuffer, to: &output)
-
-                switch status {
-                case .haveData:
-                    continue
-                case .inputRanDry, .endOfStream:
-                    break
-                case .error:
-                    throw SherpaOnnxTranscriberError.audioConversionFailed("音频转换失败。")
-                @unknown default:
-                    throw SherpaOnnxTranscriberError.audioConversionFailed("音频转换返回未知状态。")
-                }
-                break
-            }
+        let reader: AVAssetReader
+        do {
+            reader = try AVAssetReader(asset: asset)
+        } catch {
+            throw SherpaOnnxTranscriberError.audioFileUnreadable("无法创建音频读取器：\(error.localizedDescription)")
         }
 
-        return output
+        let outputSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: Self.sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false
+        ]
+        let readerOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+        readerOutput.alwaysCopiesSampleData = false
+        guard reader.canAdd(readerOutput) else {
+            throw SherpaOnnxTranscriberError.audioConversionFailed("无法添加音频解码输出。")
+        }
+        reader.add(readerOutput)
+
+        guard reader.startReading() else {
+            throw SherpaOnnxTranscriberError.audioConversionFailed(
+                reader.error?.localizedDescription ?? "无法开始读取音频。"
+            )
+        }
+
+        var samples: [Float] = []
+        while let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+            try appendSamples(from: sampleBuffer, to: &samples)
+        }
+
+        switch reader.status {
+        case .completed:
+            return samples
+        case .failed:
+            throw SherpaOnnxTranscriberError.audioConversionFailed(
+                reader.error?.localizedDescription ?? "音频解码失败。"
+            )
+        case .cancelled:
+            throw SherpaOnnxTranscriberError.audioConversionFailed("音频解码被取消。")
+        case .reading, .unknown:
+            throw SherpaOnnxTranscriberError.audioConversionFailed("音频解码未正常完成。")
+        @unknown default:
+            throw SherpaOnnxTranscriberError.audioConversionFailed("音频解码返回未知状态。")
+        }
     }
 
-    private func appendSamples(from buffer: AVAudioPCMBuffer, to output: inout [Float]) {
-        guard buffer.frameLength > 0, let channelData = buffer.floatChannelData?[0] else {
+    private func appendSamples(from sampleBuffer: CMSampleBuffer, to samples: inout [Float]) throws {
+        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
             return
         }
-        let count = Int(buffer.frameLength)
-        output.append(contentsOf: UnsafeBufferPointer(start: channelData, count: count))
+        let byteCount = CMBlockBufferGetDataLength(blockBuffer)
+        guard byteCount > 0 else {
+            return
+        }
+        guard byteCount.isMultiple(of: MemoryLayout<Float>.size) else {
+            throw SherpaOnnxTranscriberError.audioConversionFailed("音频 PCM 数据长度异常。")
+        }
+
+        let sampleCount = byteCount / MemoryLayout<Float>.size
+        let insertionIndex = samples.count
+        samples.append(contentsOf: repeatElement(0, count: sampleCount))
+        let status = samples.withUnsafeMutableBufferPointer { buffer -> OSStatus in
+            guard let baseAddress = buffer.baseAddress else {
+                return -1
+            }
+            return CMBlockBufferCopyDataBytes(
+                blockBuffer,
+                atOffset: 0,
+                dataLength: byteCount,
+                destination: UnsafeMutableRawPointer(baseAddress.advanced(by: insertionIndex))
+            )
+        }
+        guard status == noErr else {
+            throw SherpaOnnxTranscriberError.audioConversionFailed("无法复制 PCM 音频数据（\(status)）。")
+        }
     }
 
     private func drainVad(engine: SherpaOnnxEngine, into segments: inout [SubtitleSegment]) {
@@ -263,6 +264,7 @@ private struct SherpaOnnxEngine {
 enum SherpaOnnxTranscriberError: Error, LocalizedError {
     case missingModelResource(String)
     case audioFileUnreadable(String)
+    case noAudioTrack
     case noDecodableAudio
     case invalidVadWindow
     case audioConversionFailed(String)
@@ -274,6 +276,8 @@ enum SherpaOnnxTranscriberError: Error, LocalizedError {
             return "本地中文识别模型缺失：\(path)。请安装包含 sherpa-onnx 中文模型的最新版本。"
         case .audioFileUnreadable(let message):
             return "无法读取这个音频文件：\(message)。请确认文件仍在手机本地、未被移动，并重新选择。"
+        case .noAudioTrack:
+            return "这个文件没有可识别的音频轨道。请确认它是有效的 MP3、M4A、WAV 或录音文件。"
         case .noDecodableAudio:
             return "这个文件没有可识别的音频数据。请确认它是有效的 MP3、M4A、WAV 或录音文件。"
         case .invalidVadWindow:

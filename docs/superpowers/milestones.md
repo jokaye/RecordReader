@@ -616,3 +616,34 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:d6ed767386639f55eabb0f8e0418fcf673ecff6248f5c08a789689b2be0ae3f3`.
 - Unzipped IPA still contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
 - The downloaded IPA `Info.plist` contains `NSSpeechRecognitionUsageDescription` and does not contain `NSMicrophoneUsageDescription`.
+
+### 2026-05-29 M19: AVAssetReader Decode Path for Compressed Audio ASR
+
+Status: implemented locally; cloud verification pending.
+
+User report:
+
+- Debug log showed `The operation couldn’t be completed. (Foundation._GenericObjCError error 0.)` after the local ASR readability fix.
+
+Root cause:
+
+- The failure is emitted by the sherpa-onnx audio decode layer before model inference.
+- `AVAudioFile(forReading:)` can throw the generic Objective-C bridge error for some selected MP3/M4A/container-backed or file-provider audio URLs, which makes the app fall back before sherpa receives PCM samples.
+
+Fix:
+
+- Replaced the sherpa decode path from `AVAudioFile` plus `AVAudioConverter` to `AVURLAsset` plus `AVAssetReaderTrackOutput`.
+- The new path asks AVFoundation to decode the selected audio track into 16 kHz, mono, Float32 linear PCM, then feeds those samples to the existing VAD and Paraformer recognizer.
+- Added a specific `noAudioTrack` error for files that have no readable audio track.
+
+Local verification:
+
+- `xcodegen generate` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud verification:
+
+- Pending after push.
