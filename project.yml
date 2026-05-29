@@ -24,8 +24,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.recordreader.app
       TARGETED_DEVICE_FAMILY: "1"
       INFOPLIST_KEY_CFBundleDisplayName: RecordReader
-      INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: RecordReader 使用 iOS 中文语音识别为你选择的录音生成字幕。
-      INFOPLIST_KEY_NSMicrophoneUsageDescription: 语音识别框架可能需要麦克风权限来准备中文识别。
+      INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: RecordReader 读取你选择的音频文件，并使用 iOS 中文语音识别生成字幕。
       INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: true
       INFOPLIST_KEY_UIFileSharingEnabled: true
       INFOPLIST_KEY_UILaunchScreen_Generation: true

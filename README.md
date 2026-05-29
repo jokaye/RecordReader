@@ -16,7 +16,7 @@ RecordReader 是一个轻量 SwiftUI iPhone 录音播放器。它扫描用户选
 - 搜索标题、分类和格式。
 - 按名称、修改时间、文件大小和格式排序。
 - 批量收藏、取消收藏、设置分类、清除分类。
-- 使用 iOS Speech 生成中文字幕。
+- 使用 iOS Speech 从所选音频文件本身生成中文字幕，不采集麦克风或设备外放声音。
 - 用本地 JSON 持久化元数据。
 - 通过 GitHub Actions + XcodeGen 云编译。
 
@@ -53,4 +53,4 @@ xcodebuild -project RecordReader.xcodeproj -scheme RecordReader -destination 'ge
 
 从 `docs/superpowers/milestones.md` 开始。它记录已完成 milestone、本地环境阻塞和下一步云端验证 checkpoint。
 
-真机验证步骤见 `docs/device-validation.md`。字幕由 App 通过 iOS Speech 自己识别生成，不需要用户提供字幕文件。
+真机验证步骤见 `docs/device-validation.md`。字幕由 App 通过 iOS Speech 读取所选音频文件生成，不需要用户提供字幕文件，也不依赖扬声器、耳机或麦克风输入。

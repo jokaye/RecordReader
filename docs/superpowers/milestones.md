@@ -457,3 +457,33 @@ Cloud result:
 Remaining manual gate:
 
 - Re-test direct audio import on a real iPhone with the 16:50 IPA. The expected result is that tapping Open immediately exits the picker and the player shows the selected recording. If it still fails, capture whether the app shows the "没有找到支持的录音文件" message; that distinguishes picker callback failure from scanner rejection.
+
+### 2026-05-29 M15: File-Based Subtitle Recognition Boundary
+
+Status: implemented locally; cloud verification pending.
+
+User direction:
+
+- Subtitle recognition must read the selected audio file itself.
+- It must not capture device speaker output or microphone input, because users may wear headphones.
+
+Current implementation boundary:
+
+- `SpeechTranscriber` uses `SFSpeechURLRecognitionRequest(url:)` with the selected recording URL.
+- There is no `AVAudioEngine`, `inputNode`, or `SFSpeechAudioBufferRecognitionRequest` path.
+- Playback volume, speaker output, headphones, or whether the recording is currently playing are not inputs to subtitle recognition.
+
+Changes:
+
+- Removed `INFOPLIST_KEY_NSMicrophoneUsageDescription` from `project.yml`.
+- Updated the speech recognition permission text to say the app reads the selected audio file.
+- Added a code comment in `SpeechTranscriber` documenting that transcription is file-based and does not listen to microphone, speaker, or headphone output.
+- Updated `README.md` and `docs/device-validation.md` to state that subtitles are generated from the audio file itself.
+- Updated the device validation checklist to test recognition while wearing headphones or without playing the audio.
+
+Verification planned:
+
+- Confirm no microphone permission key is present after `xcodegen generate`.
+- Confirm no microphone capture APIs are present in app code.
+- Run local parse / XcodeGen / diff checks.
+- Push and cloud-verify the full `iOS` workflow, then download the latest IPA to `.build/github-artifacts/RecordReader-unsigned.ipa`.

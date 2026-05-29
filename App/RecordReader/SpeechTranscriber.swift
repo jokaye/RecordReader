@@ -2,6 +2,11 @@ import Foundation
 import RecordReaderCore
 import Speech
 
+/// Transcribes the selected audio file itself.
+///
+/// This deliberately uses `SFSpeechURLRecognitionRequest(url:)`, so subtitle
+/// generation reads the imported recording file directly. It does not record
+/// microphone input and does not listen to device speaker or headphone output.
 final class SpeechTranscriber {
     private let locale = Locale(identifier: "zh_CN")
     private let timeoutInterval: TimeInterval = 120
