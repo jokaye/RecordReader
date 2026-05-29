@@ -188,7 +188,6 @@ struct ContentView: View {
                         Image(systemName: recording.isFavorite ? "heart.fill" : "heart")
                             .font(.title2.weight(.bold))
                             .foregroundStyle(recording.isFavorite ? .white : .white.opacity(0.72))
-                            .symbolEffect(.bounce, value: recording.isFavorite)
                     }
                     .buttonStyle(IconPressButtonStyle())
                     .accessibilityLabel(recording.isFavorite ? "取消收藏" : "收藏录音")
@@ -248,9 +247,11 @@ struct ContentView: View {
             HStack(spacing: 24) {
                 Button {
                     let wasPlaying = player.isPlaying
-                    if let previous = withAnimation(.easeOut(duration: 0.2), {
-                        library.selectPrevious()
-                    }) {
+                    var previous: Recording?
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        previous = library.selectPrevious()
+                    }
+                    if let previous {
                         player.load(url: previous.url)
                         if wasPlaying {
                             player.play()
@@ -290,9 +291,11 @@ struct ContentView: View {
 
                 Button {
                     let wasPlaying = player.isPlaying
-                    if let next = withAnimation(.easeOut(duration: 0.2), {
-                        library.selectNext()
-                    }) {
+                    var next: Recording?
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        next = library.selectNext()
+                    }
+                    if let next {
                         player.load(url: next.url)
                         if wasPlaying {
                             player.play()

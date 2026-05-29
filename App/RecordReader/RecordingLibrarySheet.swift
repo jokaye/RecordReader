@@ -108,7 +108,6 @@ struct RecordingLibrarySheet: View {
                     Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(isChecked ? Color.accentColor : Color.secondary)
                         .frame(width: 24)
-                        .symbolEffect(.bounce, value: isChecked)
                 } else {
                     Image(systemName: isSelected ? "play.circle.fill" : (recording.isFavorite ? "heart.fill" : "waveform"))
                         .foregroundStyle(recording.isFavorite ? .red : .secondary)
