@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import RecordReaderCore
 
 @MainActor
 final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate {
@@ -8,6 +9,7 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
     @Published private(set) var currentTime: TimeInterval = 0
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var errorMessage: String?
+    @Published private(set) var speed: PlaybackSpeed = .default
     var onFinish: (() -> Void)?
 
     private var player: AVAudioPlayer?
@@ -47,6 +49,8 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             let nextPlayer = try AVAudioPlayer(contentsOf: url)
             nextPlayer.delegate = self
             nextPlayer.volume = 1.0
+            nextPlayer.enableRate = true
+            nextPlayer.rate = speed.rate
             guard nextPlayer.prepareToPlay(), nextPlayer.duration.isFinite, nextPlayer.duration > 0 else {
                 throw PlayerControllerError.unplayableAudio
             }
@@ -92,9 +96,21 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
             errorMessage = "无法开始播放这段录音。请确认文件仍可访问，并检查手机音量或重新导入。"
             return
         }
+        player.rate = speed.rate
         errorMessage = nil
         isPlaying = true
         startTimer()
+    }
+
+    func cycleSpeed() {
+        speed = speed.next()
+        if let player {
+            player.enableRate = true
+            player.rate = speed.rate
+            if !player.isPlaying {
+                player.pause()
+            }
+        }
     }
 
     func seek(by delta: TimeInterval) {

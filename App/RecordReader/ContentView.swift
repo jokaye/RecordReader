@@ -177,6 +177,20 @@ struct ContentView: View {
                 HStack {
                     Text(player.currentTimeLabel)
                     Spacer()
+                    Button {
+                        player.cycleSpeed()
+                    } label: {
+                        Text(player.speed.label)
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(.white.opacity(0.14))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("播放速度 \(player.speed.label)")
+                    Spacer()
                     Text(player.durationLabel)
                 }
                 .font(.caption.monospacedDigit())
@@ -185,8 +199,12 @@ struct ContentView: View {
 
             HStack(spacing: 24) {
                 Button {
+                    let wasPlaying = player.isPlaying
                     if let previous = library.selectPrevious() {
                         player.load(url: previous.url)
+                        if wasPlaying {
+                            player.play()
+                        }
                     }
                 } label: {
                     Image(systemName: "backward.end.fill")
@@ -219,8 +237,12 @@ struct ContentView: View {
                 }
 
                 Button {
+                    let wasPlaying = player.isPlaying
                     if let next = library.selectNext() {
                         player.load(url: next.url)
+                        if wasPlaying {
+                            player.play()
+                        }
                     }
                 } label: {
                     Image(systemName: "forward.end.fill")
