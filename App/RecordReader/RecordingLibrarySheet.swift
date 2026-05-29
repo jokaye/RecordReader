@@ -96,7 +96,7 @@ struct RecordingLibrarySheet: View {
         let isSelected = library.selectedRecording?.id == recording.id
         let isChecked = selectedIDs.contains(recording.id)
 
-        Button {
+        return Button {
             if isBatchMode {
                 toggleSelection(recording.id)
             } else {
