@@ -14,6 +14,7 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
     private var timer: Timer?
     private var scopedURL: URL?
     private var hasSecurityScope = false
+    private var loadedURL: URL?
 
     var progress: Double {
         guard duration > 0 else {
@@ -31,6 +32,10 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
     }
 
     func load(url: URL) {
+        if loadedURL == url, player != nil {
+            return
+        }
+
         stopTimer()
         releaseSecurityScope()
         scopedURL = url
@@ -46,12 +51,14 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
                 throw PlayerControllerError.unplayableAudio
             }
             player = nextPlayer
+            loadedURL = url
             currentTime = 0
             duration = nextPlayer.duration
             isPlaying = false
             errorMessage = nil
         } catch {
             player = nil
+            loadedURL = nil
             currentTime = 0
             duration = 0
             isPlaying = false

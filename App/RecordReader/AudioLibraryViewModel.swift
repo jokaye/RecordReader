@@ -100,7 +100,7 @@ final class AudioLibraryViewModel: ObservableObject {
             errorMessage = "刷新前请先选择录音文件夹或音频文件。"
             return
         }
-        loadRecordings(from: selectedSources)
+        loadRecordings(from: selectedSources, preserveSelection: true)
     }
 
     func select(_ recording: Recording) {
@@ -270,14 +270,20 @@ final class AudioLibraryViewModel: ObservableObject {
         loadRecordings(from: urls)
     }
 
-    private func loadRecordings(from urls: [URL]) {
+    private func loadRecordings(from urls: [URL], preserveSelection: Bool = false) {
         isLoading = true
         defer {
             isLoading = false
         }
         do {
             recordings = try scanner.scan(urls: urls, metadata: metadata)
-            selectedRecording = preferredSelectionAfterLoad
+            if preserveSelection,
+               let currentID = selectedRecording?.id,
+               let stillPresent = recordings.first(where: { $0.id == currentID }) {
+                selectedRecording = stillPresent
+            } else {
+                selectedRecording = preferredSelectionAfterLoad
+            }
             errorMessage = recordings.isEmpty ? "没有找到支持的录音文件。请选择包含 MP3、M4A、WAV 等音频的文件夹，或直接选择音频文件。" : nil
         } catch {
             recordings = []
@@ -295,7 +301,7 @@ final class AudioLibraryViewModel: ObservableObject {
         do {
             try persistMetadata()
             if !selectedSources.isEmpty {
-                loadRecordings(from: selectedSources)
+                loadRecordings(from: selectedSources, preserveSelection: true)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -326,7 +332,7 @@ final class AudioLibraryViewModel: ObservableObject {
         do {
             try persistMetadata()
             if !selectedSources.isEmpty {
-                loadRecordings(from: selectedSources)
+                loadRecordings(from: selectedSources, preserveSelection: true)
             }
         } catch {
             errorMessage = error.localizedDescription
