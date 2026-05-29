@@ -460,7 +460,7 @@ Remaining manual gate:
 
 ### 2026-05-29 M15: File-Based Subtitle Recognition Boundary
 
-Status: implemented locally; cloud verification pending.
+Status: implemented and cloud verified.
 
 User direction:
 
@@ -481,9 +481,23 @@ Changes:
 - Updated `README.md` and `docs/device-validation.md` to state that subtitles are generated from the audio file itself.
 - Updated the device validation checklist to test recognition while wearing headphones or without playing the audio.
 
-Verification planned:
+Verification:
 
 - Confirm no microphone permission key is present after `xcodegen generate`.
 - Confirm no microphone capture APIs are present in app code.
-- Run local parse / XcodeGen / diff checks.
-- Push and cloud-verify the full `iOS` workflow, then download the latest IPA to `.build/github-artifacts/RecordReader-unsigned.ipa`.
+- Local `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift && swiftc -parse App/RecordReader/*.swift` passed.
+- Local `xcodegen generate` passed.
+- Local `git diff --check` passed.
+- Local `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud result:
+
+- Commit `6f740cc` passed the full `iOS` workflow.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26628202315`
+- Artifact: `RecordReader-unsigned-ipa`, artifact id `7287002063`, digest `sha256:e9b47b4978063090c9ccaa6dcaa0d490c88066c54cef585bc83ad52742db6900`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-05-29 17:01:34 +0800`.
+- The downloaded IPA `Info.plist` contains `NSSpeechRecognitionUsageDescription` and does not contain `NSMicrophoneUsageDescription`.
+
+Remaining manual gate:
+
+- On a real iPhone, recognize subtitles while wearing headphones or without playing the audio. The expected behavior is that recognition uses the selected audio file content and does not depend on device output.
