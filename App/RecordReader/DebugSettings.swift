@@ -10,7 +10,7 @@ enum DebugSettings {
             guard UserDefaults.standard.object(forKey: sherpaThreadCountKey) != nil else {
                 return .defaultValue
             }
-            SherpaThreadCount(
+            return SherpaThreadCount(
                 rawValueOrDefault: UserDefaults.standard.integer(forKey: sherpaThreadCountKey)
             )
         }
@@ -24,7 +24,7 @@ enum DebugSettings {
             guard UserDefaults.standard.object(forKey: transcriptionWindowDurationKey) != nil else {
                 return .defaultValue
             }
-            TranscriptionWindowDuration(
+            return TranscriptionWindowDuration(
                 rawValueOrDefault: UserDefaults.standard.integer(forKey: transcriptionWindowDurationKey)
             )
         }
