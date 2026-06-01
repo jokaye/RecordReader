@@ -1386,3 +1386,43 @@ Cloud verification:
 - Local downloaded IPA size: `174M`.
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`, `TextDecoder.mlmodelc`, `tokenizer.json`, `vocab.json`, and `merges.txt` in `Payload/RecordReader.app`.
 - Unzipped IPA does not contain sherpa `model.int8.onnx`, `silero_vad.onnx`, or `tokens.txt`.
+
+### 2026-06-01 M30E: WhisperKit Quality-First Decoding Patch
+
+Status: cloud verified on experiment branch.
+
+User feedback:
+
+- WhisperKit Small output is basically unusable and very different from the original audio.
+- WhisperKit Base has the same low-accuracy behavior, so this is unlikely to be only a Small quantization issue.
+
+Diagnosis:
+
+- Small and Base share the same app decoding chain.
+- The previous chain used WhisperKit VAD chunking, two concurrent workers, and temperature fallback.
+- For long Chinese audio, that combination can cut context aggressively and retry low-confidence windows at higher temperatures, which increases hallucination risk.
+
+Fix:
+
+- Added `WhisperKitDecodingSettings.qualityFirstChinese` in `RecordReaderCore`.
+- WhisperKit now decodes Chinese with one worker, no VAD chunking, no temperature fallback, and fixed Chinese prefill.
+- Added diagnostic logging for WhisperKit results: model, result count, segment count, language, average log probability, average compression ratio, and text preview.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources passed with the sherpa-onnx bridging header using the main worktree's local header cache.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter ExperimentalTranscriptionEngineTests/testWhisperKitQualityFirstDecodingAvoidsAggressiveChunkingAndFallback` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Commit `80d427c` passed the full `iOS` workflow on `codex/whisperkit-coreml-experiment`.
+- The workflow published its IPA under branch-specific tag `codex-whisperkit-coreml-experiment-unsigned-ipa`.
+- Latest experiment IPA was downloaded locally to `.build/github-artifacts/RecordReader-whisperkit-experiment-unsigned.ipa` at `2026-06-01 17:50:00 +0800`.
+- Local downloaded IPA digest: `sha256:2e413945b33db99dc73137c56d482048616975981bd60c52a275fb35805e225c`.
+- Local downloaded IPA size: `174M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`, `TextDecoder.mlmodelc`, `tokenizer.json`, `vocab.json`, and `merges.txt` in `Payload/RecordReader.app`.
+- Unzipped IPA does not contain sherpa `model.int8.onnx`, `silero_vad.onnx`, or `tokens.txt`.
