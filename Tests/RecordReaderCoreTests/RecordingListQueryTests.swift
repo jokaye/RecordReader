@@ -80,6 +80,34 @@ final class RecordingListQueryTests: XCTestCase {
         )
     }
 
+    func testApplyingMetadataUpdatesOnlyLibraryFieldsAndKeepsFileIdentity() {
+        let subtitle = SubtitleDocument(
+            status: .failed,
+            segments: [],
+            errorMessage: "识别失败"
+        )
+        let recordings = [
+            makeRecording(id: "a", title: "会议记录", fileExtension: "mp3", fileSize: 1024, modifiedAt: Date(timeIntervalSince1970: 10)),
+            makeRecording(id: "b", title: "课堂录音", fileExtension: "m4a", fileSize: 2048, modifiedAt: Date(timeIntervalSince1970: 20), isFavorite: true, category: "学习")
+        ]
+
+        let updated = RecordingListQuery.recordingsByApplyingMetadata(
+            RecordingMetadata(isFavorite: true, category: "工作", subtitle: subtitle),
+            to: "a",
+            in: recordings
+        )
+
+        XCTAssertEqual(updated[0].id, recordings[0].id)
+        XCTAssertEqual(updated[0].url, recordings[0].url)
+        XCTAssertEqual(updated[0].title, recordings[0].title)
+        XCTAssertEqual(updated[0].fileSize, recordings[0].fileSize)
+        XCTAssertEqual(updated[0].modifiedAt, recordings[0].modifiedAt)
+        XCTAssertTrue(updated[0].isFavorite)
+        XCTAssertEqual(updated[0].category, "工作")
+        XCTAssertEqual(updated[0].subtitle, subtitle)
+        XCTAssertEqual(updated[1], recordings[1])
+    }
+
     private func makeRecording(
         id: String,
         title: String,

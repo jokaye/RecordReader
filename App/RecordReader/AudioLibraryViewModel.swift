@@ -518,15 +518,36 @@ final class AudioLibraryViewModel: ObservableObject {
         RecordingListQuery.initialSelectionAfterImport(recordings, sort: sort)
     }
 
-    private func updateMetadata(_ record: RecordingMetadata, for id: String) {
+    private enum MetadataRefreshStrategy {
+        case reloadSources
+        case updateInMemory
+    }
+
+    private func updateMetadata(
+        _ record: RecordingMetadata,
+        for id: String,
+        refreshStrategy: MetadataRefreshStrategy = .reloadSources
+    ) {
         metadata.records[id] = record
         do {
             try persistMetadata()
-            if !selectedSources.isEmpty {
+            if refreshStrategy == .reloadSources, !selectedSources.isEmpty {
                 loadRecordings(from: selectedSources, preserveSelection: true)
+            } else {
+                applyMetadata(record, for: id)
             }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applyMetadata(_ record: RecordingMetadata, for id: Recording.ID) {
+        recordings = RecordingListQuery.recordingsByApplyingMetadata(record, to: id, in: recordings)
+        if let selectedRecording, selectedRecording.id == id {
+            self.selectedRecording = RecordingListQuery.recordingByApplyingMetadata(
+                record,
+                to: selectedRecording
+            )
         }
     }
 
@@ -562,13 +583,14 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private func setSubtitle(_ subtitle: SubtitleDocument, for id: String) {
+        let recording = recordings.first { $0.id == id }
         var record = metadata.records[id] ?? RecordingMetadata(
-            isFavorite: selectedRecording?.isFavorite ?? false,
-            category: selectedRecording?.category,
+            isFavorite: recording?.isFavorite ?? false,
+            category: recording?.category,
             subtitle: nil
         )
         record.subtitle = subtitle
-        updateMetadata(record, for: id)
+        updateMetadata(record, for: id, refreshStrategy: .updateInMemory)
     }
 
     private func setSubtitleRecognitionProgress(_ progress: SubtitleRecognitionProgress, for id: Recording.ID) {
