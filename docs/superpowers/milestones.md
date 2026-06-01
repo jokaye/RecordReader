@@ -1292,3 +1292,43 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:6771cfe3f5aadbbf3ad4e98b270588dd767c7234e000111e8001ea3d68e7953c`.
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
+
+### 2026-06-01 M28E: WhisperKit Stable Audio Input Patch
+
+Status: cloud verified on experiment branch.
+
+User direction:
+
+- Fix the experiment build error: "WhisperKit CoreML 实验失败：resource path does not exist ... tmp/...-Inbox/..." on a self-signed app.
+
+Diagnosis:
+
+- WhisperKit 1.0.0 calls `AudioProcessor.loadAudioAsFloatArray(fromPath:)`.
+- That path first checks `FileManager.default.fileExists(atPath:)` and throws `Resource path does not exist ...` before AVFoundation can load the file.
+- iOS document-picker copied files can live under App sandbox `tmp/...-Inbox/`, and open-in-place URLs can require security-scoped access. Passing those raw paths directly to WhisperKit is fragile.
+
+Fix:
+
+- Added `PathBasedAudioInputPreparer` in `RecordReaderCore`.
+- WhisperKit transcription now starts security-scoped access for the selected URL, copies the source audio into `Caches/RecordReader/WhisperKitAudioInputs`, passes that stable app-owned path to WhisperKit, and removes the temporary copy after transcription finishes.
+- Synced the main subtitle retry patch into the experiment branch so subtitle state updates no longer rescan selected sources during recognition/failure.
+
+Local verification:
+
+- Confirmed the new audio input preparer API was absent before implementation with a focused `swiftc -typecheck` snippet.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- A focused Swift runner created an `Inbox/sample.mp3`, copied it through `PathBasedAudioInputPreparer`, verified the stable file exists, and verified bytes match the source.
+- `swiftc -parse` for the app target sources passed with the sherpa-onnx bridging header using the main worktree's local header cache.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordingListQueryTests/testPathBasedAudioInputPreparerCopiesSourceIntoStableWorkingFile` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Commit `9e5119e` passed the full `iOS` workflow on `codex/whisperkit-coreml-experiment`.
+- The workflow published its IPA under branch-specific tag `codex-whisperkit-coreml-experiment-unsigned-ipa`, leaving `main`'s `latest-unsigned-ipa` untouched.
+- Latest experiment IPA was downloaded locally to `.build/github-artifacts/RecordReader-whisperkit-experiment-unsigned.ipa` at `2026-06-01 17:28:00 +0800`.
+- Local downloaded IPA digest: `sha256:2c7894e8e9c6e7d87cbea878d73ebf94a583909ff905f94b646d2183a6dab984`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
