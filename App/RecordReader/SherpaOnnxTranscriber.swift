@@ -6,7 +6,6 @@ actor SherpaOnnxTranscriber {
     private static let sampleRate = 16_000
     private static let featureDim = 80
     private static let fullCoverageThresholdDuration: TimeInterval = 120
-    private static let fullCoverageWindowDuration: TimeInterval = 25
 
     private var recognizer: SherpaOnnxOfflineRecognizer?
     private var vad: SherpaOnnxVoiceActivityDetectorWrapper?
@@ -16,6 +15,7 @@ actor SherpaOnnxTranscriber {
     func transcribe(
         url: URL,
         threadCount: SherpaThreadCount = .defaultValue,
+        windowDuration: TranscriptionWindowDuration = .defaultValue,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void = { _ in }
     ) async throws -> [SubtitleSegment] {
         let startedAt = Date()
@@ -36,6 +36,7 @@ actor SherpaOnnxTranscriber {
                 recognizer: engine.recognizer,
                 startedAt: startedAt,
                 expectedDuration: assetDuration,
+                windowDuration: windowDuration,
                 progress: progress
             )
         }
@@ -63,6 +64,7 @@ actor SherpaOnnxTranscriber {
             let segments = decodeFixedWindows(
                 samples: samples,
                 recognizer: engine.recognizer,
+                windowDuration: windowDuration,
                 progress: progress
             )
             DebugLog.shared.log("sherpa-onnx 长音频全覆盖识别完成：\(segments.count) 段字幕")
@@ -96,6 +98,7 @@ actor SherpaOnnxTranscriber {
             let fallback = decodeFixedWindows(
                 samples: samples,
                 recognizer: engine.recognizer,
+                windowDuration: windowDuration,
                 progress: progress
             )
             DebugLog.shared.log("sherpa-onnx VAD 未产出字幕，固定窗口兜底完成：\(fallback.count) 段字幕")
@@ -165,7 +168,7 @@ actor SherpaOnnxTranscriber {
         self.vad = vad
         self.vadModelConfig = vadModelConfig
         self.loadedThreadCount = threadCount
-        DebugLog.shared.log("sherpa-onnx 引擎已加载：线程数=\(threadCount.rawValue)")
+        DebugLog.shared.log("sherpa-onnx 引擎已加载：线程数=\(threadCount.label)")
         return SherpaOnnxEngine(recognizer: recognizer, vad: vad, vadModelConfig: vadModelConfig)
     }
 
@@ -323,23 +326,40 @@ actor SherpaOnnxTranscriber {
     private func decodeFixedWindows(
         samples: [Float],
         recognizer: SherpaOnnxOfflineRecognizer,
+        windowDuration: TranscriptionWindowDuration,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void = { _ in }
     ) -> [SubtitleSegment] {
         let windows = TranscriptionWindowPlanner.fixedWindows(
             sampleCount: samples.count,
             sampleRate: Self.sampleRate,
-            windowDuration: Self.fullCoverageWindowDuration
+            windowDuration: windowDuration.duration
         )
-        DebugLog.shared.log("sherpa-onnx 固定窗口识别：\(windows.count) 个窗口")
+        DebugLog.shared.log("sherpa-onnx 固定窗口识别：\(windows.count) 个窗口，窗口长度=\(windowDuration.rawValue) 秒")
         progress(.recognizing(completedSegments: 0, totalSegments: windows.count))
         var segments: [SubtitleSegment] = []
+        var timingRecords: [TranscriptionWindowTiming] = []
         for (index, plannedWindow) in windows.enumerated() {
             let window = Array(samples[plannedWindow.startSample..<plannedWindow.endSample])
+            let windowStartedAt = Date()
+            let producedSubtitle: Bool
             if let segment = decodeWindow(samples: window, window: plannedWindow, recognizer: recognizer) {
                 segments.append(segment)
+                producedSubtitle = true
+            } else {
+                producedSubtitle = false
             }
+            let elapsed = Date().timeIntervalSince(windowStartedAt)
+            timingRecords.append(TranscriptionWindowTiming(elapsed: elapsed, producedSubtitle: producedSubtitle))
+            logWindowTiming(
+                index: index + 1,
+                total: windows.count,
+                window: plannedWindow,
+                elapsed: elapsed,
+                producedSubtitle: producedSubtitle
+            )
             progress(.recognizing(completedSegments: index + 1, totalSegments: windows.count))
         }
+        logWindowTimingSummary(timingRecords)
         return segments
     }
 
@@ -348,50 +368,82 @@ actor SherpaOnnxTranscriber {
         recognizer: SherpaOnnxOfflineRecognizer,
         startedAt: Date,
         expectedDuration: TimeInterval,
+        windowDuration: TranscriptionWindowDuration,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void
     ) async throws -> [SubtitleSegment] {
         let decodeStartedAt = Date()
         var buffer = TranscriptionWindowBuffer(
             sampleRate: Self.sampleRate,
-            windowDuration: Self.fullCoverageWindowDuration
+            windowDuration: windowDuration.duration
         )
         var segments: [SubtitleSegment] = []
         var windowCount = 0
-        let expectedWindowCount = max(1, Int(ceil(expectedDuration / Self.fullCoverageWindowDuration)))
+        var timingRecords: [TranscriptionWindowTiming] = []
+        let expectedWindowCount = max(1, Int(ceil(expectedDuration / windowDuration.duration)))
         progress(.recognizing(completedSegments: 0, totalSegments: expectedWindowCount))
 
         let decodedSampleCount = try await decodeAudioFile(asset) { chunk in
             for windowSamples in buffer.append(chunk) {
                 windowCount += 1
+                let windowStartedAt = Date()
+                let producedSubtitle: Bool
                 if let segment = decodeWindow(
                     samples: windowSamples.samples,
                     window: windowSamples.window,
                     recognizer: recognizer
                 ) {
                     segments.append(segment)
+                    producedSubtitle = true
+                } else {
+                    producedSubtitle = false
                 }
+                let elapsed = Date().timeIntervalSince(windowStartedAt)
+                timingRecords.append(TranscriptionWindowTiming(elapsed: elapsed, producedSubtitle: producedSubtitle))
+                logWindowTiming(
+                    index: windowCount,
+                    total: expectedWindowCount,
+                    window: windowSamples.window,
+                    elapsed: elapsed,
+                    producedSubtitle: producedSubtitle
+                )
                 progress(.recognizing(completedSegments: windowCount, totalSegments: expectedWindowCount))
             }
         }
 
         if let finalWindow = buffer.finish() {
             windowCount += 1
+            let windowStartedAt = Date()
+            let producedSubtitle: Bool
             if let segment = decodeWindow(
                 samples: finalWindow.samples,
                 window: finalWindow.window,
                 recognizer: recognizer
             ) {
                 segments.append(segment)
+                producedSubtitle = true
+            } else {
+                producedSubtitle = false
             }
+            let elapsed = Date().timeIntervalSince(windowStartedAt)
+            timingRecords.append(TranscriptionWindowTiming(elapsed: elapsed, producedSubtitle: producedSubtitle))
+            logWindowTiming(
+                index: windowCount,
+                total: expectedWindowCount,
+                window: finalWindow.window,
+                elapsed: elapsed,
+                producedSubtitle: producedSubtitle
+            )
             progress(.recognizing(completedSegments: windowCount, totalSegments: expectedWindowCount))
         }
+        logWindowTimingSummary(timingRecords)
 
         let decodedDuration = TimeInterval(decodedSampleCount) / TimeInterval(Self.sampleRate)
         DebugLog.shared.log(
             String(
-                format: "sherpa-onnx 流式长音频识别完成：预估 %.1f 秒，解码 %.1f 秒，%d 个窗口，%d 段字幕，解码+识别用时 %.2f 秒，总用时 %.2f 秒",
+                format: "sherpa-onnx 流式长音频识别完成：预估 %.1f 秒，解码 %.1f 秒，窗口长度 %d 秒，%d 个窗口，%d 段字幕，解码+识别用时 %.2f 秒，总用时 %.2f 秒",
                 expectedDuration,
                 decodedDuration,
+                windowDuration.rawValue,
                 windowCount,
                 segments.count,
                 Date().timeIntervalSince(decodeStartedAt),
@@ -425,12 +477,57 @@ actor SherpaOnnxTranscriber {
             text: text
         )
     }
+
+    private func logWindowTiming(
+        index: Int,
+        total: Int,
+        window: TranscriptionWindow,
+        elapsed: TimeInterval,
+        producedSubtitle: Bool
+    ) {
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx 窗口 %d/%d：%.1f-%.1f 秒，用时 %.2f 秒，字幕=%@",
+                index,
+                total,
+                window.startTime,
+                window.endTime,
+                elapsed,
+                producedSubtitle ? "有" : "无"
+            )
+        )
+    }
+
+    private func logWindowTimingSummary(_ timingRecords: [TranscriptionWindowTiming]) {
+        guard !timingRecords.isEmpty else {
+            return
+        }
+        let totalElapsed = timingRecords.reduce(0) { $0 + $1.elapsed }
+        let averageElapsed = totalElapsed / Double(timingRecords.count)
+        let maxElapsed = timingRecords.map(\.elapsed).max() ?? 0
+        let subtitleCount = timingRecords.filter(\.producedSubtitle).count
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx 窗口耗时汇总：%d 个窗口，平均 %.2f 秒，最慢 %.2f 秒，有字幕 %d 个，空窗口 %d 个",
+                timingRecords.count,
+                averageElapsed,
+                maxElapsed,
+                subtitleCount,
+                timingRecords.count - subtitleCount
+            )
+        )
+    }
 }
 
 private struct SherpaOnnxEngine {
     let recognizer: SherpaOnnxOfflineRecognizer
     let vad: SherpaOnnxVoiceActivityDetectorWrapper
     let vadModelConfig: SherpaOnnxVadModelConfig
+}
+
+private struct TranscriptionWindowTiming {
+    let elapsed: TimeInterval
+    let producedSubtitle: Bool
 }
 
 enum SherpaOnnxTranscriberError: Error, LocalizedError {

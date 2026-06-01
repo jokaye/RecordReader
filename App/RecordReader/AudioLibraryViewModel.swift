@@ -228,6 +228,7 @@ final class AudioLibraryViewModel: ObservableObject {
         let id = selectedRecording.id
         let url = selectedRecording.url
         let threadCount = DebugSettings.sherpaThreadCount
+        let windowDuration = DebugSettings.transcriptionWindowDuration
         activeSubtitleRecognitionID = id
         subtitleRecognitionProgress = .readingAudio
         setSubtitle(
@@ -235,7 +236,7 @@ final class AudioLibraryViewModel: ObservableObject {
             for: id
         )
         statusMessage = "正在用本地中文模型识别字幕…"
-        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，线程数=\(threadCount.rawValue)")
+        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒")
 
         Task { [weak self] in
             guard let self else {
@@ -244,7 +245,8 @@ final class AudioLibraryViewModel: ObservableObject {
             do {
                 let segments = try await self.sherpaTranscriber.transcribe(
                     url: url,
-                    threadCount: threadCount
+                    threadCount: threadCount,
+                    windowDuration: windowDuration
                 ) { [weak self] progress in
                     Task { @MainActor in
                         self?.setSubtitleRecognitionProgress(progress, for: id)
