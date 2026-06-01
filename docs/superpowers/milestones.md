@@ -905,7 +905,11 @@ Local verification:
 - `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
 - `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
 - `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -typecheck` for `SherpaOnnxTranscriber.swift` plus the sherpa-onnx wrapper passed with a local `DebugLog` stub, covering the parallel worker implementation and Swift concurrency checks.
 - `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.TranscriptionWorkerCountTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
 - `git diff --check` passed.
 - `swift test --filter RecordReaderCoreTests.RecognitionProviderTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
 - Full local app typecheck remains blocked because this machine does not expose the iOS SDK to `swiftc`, so `UIKit` is unavailable outside cloud Xcode.
@@ -1098,3 +1102,41 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:f37204fdf3b0f7ec52dafc67548a029eeaf5c8e2799f55247e66db589b050e16`.
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+
+### 2026-06-01 M26: CPU Parallel Long-Audio Recognition
+
+Status: implemented locally, awaiting cloud verification.
+
+User direction:
+
+- First implement a CPU parallel version.
+- CoreML-compatible model POC can follow later.
+- Target class: 10 minutes under 20 seconds, 20 minutes under 40 seconds.
+
+Design:
+
+- Keep the current sherpa-onnx Paraformer int8 CPU model.
+- Only parallelize the long-audio full-coverage fixed-window path.
+- Keep short-audio VAD recognition unchanged.
+- Use one `SherpaOnnxOfflineRecognizer` per worker instead of sharing a recognizer across threads.
+- Keep worker count bounded to `Auto / 1 / 2 / 3`; `Auto` currently means 2 workers.
+
+Fix:
+
+- Added `TranscriptionWorkerCount` in `RecordReaderCore`.
+- Added Debug setting `长音频并行数` with `Auto / 1 / 2 / 3`.
+- `AudioLibraryViewModel` now passes the selected worker count into `SherpaOnnxTranscriber`.
+- `SherpaOnnxTranscriber` now runs long-audio fixed windows in parallel when the effective worker count is greater than 1.
+- Parallel output preserves subtitle ordering by writing results back to the original window index before merging.
+- Logs now include the selected parallel count and the effective worker count used for long-audio recognition.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+
+Cloud verification:
+
+- Pending.

@@ -18,6 +18,7 @@ actor SherpaOnnxTranscriber {
         threadCount: SherpaThreadCount = .defaultValue,
         windowDuration: TranscriptionWindowDuration = .defaultValue,
         recognitionProvider: RecognitionProvider = .defaultValue,
+        workerCount: TranscriptionWorkerCount = .defaultValue,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void = { _ in }
     ) async throws -> [SubtitleSegment] {
         let startedAt = Date()
@@ -38,7 +39,10 @@ actor SherpaOnnxTranscriber {
                 recognizer: engine.recognizer,
                 startedAt: startedAt,
                 expectedDuration: assetDuration,
+                threadCount: threadCount,
                 windowDuration: windowDuration,
+                recognitionProvider: recognitionProvider,
+                workerCount: workerCount,
                 progress: progress
             )
         }
@@ -135,42 +139,16 @@ actor SherpaOnnxTranscriber {
         }
         let loadStartedAt = Date()
 
-        let model = try bundledResource(
-            name: "model.int8",
-            extension: "onnx",
-            subdirectory: "SherpaOnnxModels/paraformer-zh"
+        let recognizer = try makeOfflineRecognizer(
+            threadCount: threadCount,
+            recognitionProvider: recognitionProvider
         )
-        let tokens = try bundledResource(
-            name: "tokens",
-            extension: "txt",
-            subdirectory: "SherpaOnnxModels/paraformer-zh"
-        )
+
         let vadModel = try bundledResource(
             name: "silero_vad",
             extension: "onnx",
             subdirectory: "SherpaOnnxModels/vad"
         )
-
-        let featConfig = sherpaOnnxFeatureConfig(
-            sampleRate: Self.sampleRate,
-            featureDim: Self.featureDim
-        )
-        if recognitionProvider.runtimeDebugValue > 0 {
-            DebugLog.shared.log("CoreML 运行时诊断已开启；请在设备系统日志中查看 ONNX Runtime/CoreML 节点分配信息")
-        }
-        let modelConfig = sherpaOnnxOfflineModelConfig(
-            tokens: tokens.path,
-            paraformer: sherpaOnnxOfflineParaformerModelConfig(model: model.path),
-            numThreads: threadCount.rawValue,
-            provider: recognitionProvider.rawValue,
-            debug: recognitionProvider.runtimeDebugValue,
-            modelType: "paraformer"
-        )
-        var recognizerConfig = sherpaOnnxOfflineRecognizerConfig(
-            featConfig: featConfig,
-            modelConfig: modelConfig
-        )
-        let recognizer = try SherpaOnnxOfflineRecognizer(config: &recognizerConfig)
 
         let sileroVadConfig = sherpaOnnxSileroVadModelConfig(model: vadModel.path)
         var vadModelConfig = sherpaOnnxVadModelConfig(sileroVad: sileroVadConfig)
@@ -193,6 +171,43 @@ actor SherpaOnnxTranscriber {
             )
         )
         return SherpaOnnxEngine(recognizer: recognizer, vad: vad, vadModelConfig: vadModelConfig)
+    }
+
+    private func makeOfflineRecognizer(
+        threadCount: SherpaThreadCount,
+        recognitionProvider: RecognitionProvider
+    ) throws -> SherpaOnnxOfflineRecognizer {
+        let model = try bundledResource(
+            name: "model.int8",
+            extension: "onnx",
+            subdirectory: "SherpaOnnxModels/paraformer-zh"
+        )
+        let tokens = try bundledResource(
+            name: "tokens",
+            extension: "txt",
+            subdirectory: "SherpaOnnxModels/paraformer-zh"
+        )
+
+        let featConfig = sherpaOnnxFeatureConfig(
+            sampleRate: Self.sampleRate,
+            featureDim: Self.featureDim
+        )
+        if recognitionProvider.runtimeDebugValue > 0 {
+            DebugLog.shared.log("CoreML 运行时诊断已开启；请在设备系统日志中查看 ONNX Runtime/CoreML 节点分配信息")
+        }
+        let modelConfig = sherpaOnnxOfflineModelConfig(
+            tokens: tokens.path,
+            paraformer: sherpaOnnxOfflineParaformerModelConfig(model: model.path),
+            numThreads: threadCount.rawValue,
+            provider: recognitionProvider.rawValue,
+            debug: recognitionProvider.runtimeDebugValue,
+            modelType: "paraformer"
+        )
+        var recognizerConfig = sherpaOnnxOfflineRecognizerConfig(
+            featConfig: featConfig,
+            modelConfig: modelConfig
+        )
+        return try SherpaOnnxOfflineRecognizer(config: &recognizerConfig)
     }
 
     private func bundledResource(name: String, extension fileExtension: String, subdirectory: String) throws -> URL {
@@ -365,7 +380,7 @@ actor SherpaOnnxTranscriber {
             let window = Array(samples[plannedWindow.startSample..<plannedWindow.endSample])
             let windowStartedAt = Date()
             let producedSubtitle: Bool
-            if let segment = decodeWindow(samples: window, window: plannedWindow, recognizer: recognizer) {
+            if let segment = Self.decodeWindow(samples: window, window: plannedWindow, recognizer: recognizer) {
                 segments.append(segment)
                 producedSubtitle = true
             } else {
@@ -373,7 +388,7 @@ actor SherpaOnnxTranscriber {
             }
             let elapsed = Date().timeIntervalSince(windowStartedAt)
             timingRecords.append(TranscriptionWindowTiming(elapsed: elapsed, producedSubtitle: producedSubtitle))
-            logWindowTiming(
+            Self.logWindowTiming(
                 index: index + 1,
                 total: windows.count,
                 window: plannedWindow,
@@ -382,7 +397,7 @@ actor SherpaOnnxTranscriber {
             )
             progress(.recognizing(completedSegments: index + 1, totalSegments: windows.count))
         }
-        logWindowTimingSummary(timingRecords)
+        Self.logWindowTimingSummary(timingRecords)
         return segments
     }
 
@@ -391,9 +406,28 @@ actor SherpaOnnxTranscriber {
         recognizer: SherpaOnnxOfflineRecognizer,
         startedAt: Date,
         expectedDuration: TimeInterval,
+        threadCount: SherpaThreadCount,
         windowDuration: TranscriptionWindowDuration,
+        recognitionProvider: RecognitionProvider,
+        workerCount: TranscriptionWorkerCount,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void
     ) async throws -> [SubtitleSegment] {
+        let expectedWindowCount = max(1, Int(ceil(expectedDuration / windowDuration.duration)))
+        let effectiveWorkerCount = workerCount.effectiveWorkerCount(totalWindows: expectedWindowCount)
+        if effectiveWorkerCount > 1 {
+            return try await transcribeLongAudioInParallel(
+                asset: asset,
+                baseRecognizer: recognizer,
+                startedAt: startedAt,
+                expectedDuration: expectedDuration,
+                threadCount: threadCount,
+                windowDuration: windowDuration,
+                recognitionProvider: recognitionProvider,
+                workerCount: effectiveWorkerCount,
+                progress: progress
+            )
+        }
+
         let decodeStartedAt = Date()
         var buffer = TranscriptionWindowBuffer(
             sampleRate: Self.sampleRate,
@@ -402,7 +436,6 @@ actor SherpaOnnxTranscriber {
         var segments: [SubtitleSegment] = []
         var windowCount = 0
         var timingRecords: [TranscriptionWindowTiming] = []
-        let expectedWindowCount = max(1, Int(ceil(expectedDuration / windowDuration.duration)))
         progress(.recognizing(completedSegments: 0, totalSegments: expectedWindowCount))
 
         let decodedSampleCount = try await decodeAudioFile(asset) { chunk in
@@ -410,7 +443,7 @@ actor SherpaOnnxTranscriber {
                 windowCount += 1
                 let windowStartedAt = Date()
                 let producedSubtitle: Bool
-                if let segment = decodeWindow(
+                if let segment = Self.decodeWindow(
                     samples: windowSamples.samples,
                     window: windowSamples.window,
                     recognizer: recognizer
@@ -422,7 +455,7 @@ actor SherpaOnnxTranscriber {
                 }
                 let elapsed = Date().timeIntervalSince(windowStartedAt)
                 timingRecords.append(TranscriptionWindowTiming(elapsed: elapsed, producedSubtitle: producedSubtitle))
-                logWindowTiming(
+                Self.logWindowTiming(
                     index: windowCount,
                     total: expectedWindowCount,
                     window: windowSamples.window,
@@ -437,7 +470,7 @@ actor SherpaOnnxTranscriber {
             windowCount += 1
             let windowStartedAt = Date()
             let producedSubtitle: Bool
-            if let segment = decodeWindow(
+            if let segment = Self.decodeWindow(
                 samples: finalWindow.samples,
                 window: finalWindow.window,
                 recognizer: recognizer
@@ -449,7 +482,7 @@ actor SherpaOnnxTranscriber {
             }
             let elapsed = Date().timeIntervalSince(windowStartedAt)
             timingRecords.append(TranscriptionWindowTiming(elapsed: elapsed, producedSubtitle: producedSubtitle))
-            logWindowTiming(
+            Self.logWindowTiming(
                 index: windowCount,
                 total: expectedWindowCount,
                 window: finalWindow.window,
@@ -458,7 +491,7 @@ actor SherpaOnnxTranscriber {
             )
             progress(.recognizing(completedSegments: windowCount, totalSegments: expectedWindowCount))
         }
-        logWindowTimingSummary(timingRecords)
+        Self.logWindowTimingSummary(timingRecords)
 
         let decodedDuration = TimeInterval(decodedSampleCount) / TimeInterval(Self.sampleRate)
         DebugLog.shared.log(
@@ -484,7 +517,136 @@ actor SherpaOnnxTranscriber {
         return segments
     }
 
-    private func decodeWindow(
+    private func transcribeLongAudioInParallel(
+        asset: AVURLAsset,
+        baseRecognizer: SherpaOnnxOfflineRecognizer,
+        startedAt: Date,
+        expectedDuration: TimeInterval,
+        threadCount: SherpaThreadCount,
+        windowDuration: TranscriptionWindowDuration,
+        recognitionProvider: RecognitionProvider,
+        workerCount: Int,
+        progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void
+    ) async throws -> [SubtitleSegment] {
+        let decodeStartedAt = Date()
+        let samples = try await decodeAudioFile(asset)
+        guard !samples.isEmpty else {
+            throw SherpaOnnxTranscriberError.noDecodableAudio
+        }
+        let decodedDuration = TimeInterval(samples.count) / TimeInterval(Self.sampleRate)
+        let windows = TranscriptionWindowPlanner.fixedWindows(
+            sampleCount: samples.count,
+            sampleRate: Self.sampleRate,
+            windowDuration: windowDuration.duration
+        )
+        guard !windows.isEmpty else {
+            throw SherpaOnnxTranscriberError.noDecodableAudio
+        }
+
+        let effectiveWorkerCount = min(workerCount, windows.count)
+        let recognizers = try makeParallelRecognizers(
+            baseRecognizer: baseRecognizer,
+            workerCount: effectiveWorkerCount,
+            threadCount: threadCount,
+            recognitionProvider: recognitionProvider
+        )
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx 并行长音频识别：%d 个窗口，窗口长度=%d 秒，并行=%d，解码 %.1f 秒，用时 %.2f 秒",
+                windows.count,
+                windowDuration.rawValue,
+                effectiveWorkerCount,
+                decodedDuration,
+                Date().timeIntervalSince(decodeStartedAt)
+            )
+        )
+
+        progress(.recognizing(completedSegments: 0, totalSegments: windows.count))
+        let state = ParallelTranscriptionState(windowCount: windows.count)
+
+        DispatchQueue.concurrentPerform(iterations: effectiveWorkerCount) { workerIndex in
+            let recognizer = recognizers[workerIndex]
+            var windowIndex = workerIndex
+            while windowIndex < windows.count {
+                let plannedWindow = windows[windowIndex]
+                let window = Array(samples[plannedWindow.startSample..<plannedWindow.endSample])
+                let windowStartedAt = Date()
+                let segment = Self.decodeWindow(
+                    samples: window,
+                    window: plannedWindow,
+                    recognizer: recognizer
+                )
+                let elapsed = Date().timeIntervalSince(windowStartedAt)
+                let currentCompletedCount = state.record(
+                    index: windowIndex,
+                    segment: segment,
+                    timing: TranscriptionWindowTiming(
+                        elapsed: elapsed,
+                        producedSubtitle: segment != nil
+                    )
+                )
+                progress(.recognizing(completedSegments: currentCompletedCount, totalSegments: windows.count))
+                windowIndex += effectiveWorkerCount
+            }
+        }
+
+        let timingRecords = state.timingRecords
+        for (index, timing) in timingRecords.enumerated() {
+            Self.logWindowTiming(
+                index: index + 1,
+                total: windows.count,
+                window: windows[index],
+                elapsed: timing.elapsed,
+                producedSubtitle: timing.producedSubtitle
+            )
+        }
+        Self.logWindowTimingSummary(timingRecords)
+
+        let segments = state.segments
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx 并行长音频识别完成：预估 %.1f 秒，解码 %.1f 秒，窗口长度 %d 秒，%d 个窗口，并行 %d，%d 段字幕，解码+识别用时 %.2f 秒，总用时 %.2f 秒",
+                expectedDuration,
+                decodedDuration,
+                windowDuration.rawValue,
+                windows.count,
+                effectiveWorkerCount,
+                segments.count,
+                Date().timeIntervalSince(decodeStartedAt),
+                Date().timeIntervalSince(startedAt)
+            )
+        )
+
+        if segments.isEmpty {
+            throw SherpaOnnxTranscriberError.noSpeechDetected
+        }
+        progress(.finalizing)
+        return segments
+    }
+
+    private func makeParallelRecognizers(
+        baseRecognizer: SherpaOnnxOfflineRecognizer,
+        workerCount: Int,
+        threadCount: SherpaThreadCount,
+        recognitionProvider: RecognitionProvider
+    ) throws -> [SherpaOnnxOfflineRecognizer] {
+        guard workerCount > 1 else {
+            return [baseRecognizer]
+        }
+        var recognizers = [baseRecognizer]
+        recognizers.reserveCapacity(workerCount)
+        for _ in 1..<workerCount {
+            recognizers.append(
+                try makeOfflineRecognizer(
+                    threadCount: threadCount,
+                    recognitionProvider: recognitionProvider
+                )
+            )
+        }
+        return recognizers
+    }
+
+    private static func decodeWindow(
         samples: [Float],
         window: TranscriptionWindow,
         recognizer: SherpaOnnxOfflineRecognizer
@@ -501,7 +663,7 @@ actor SherpaOnnxTranscriber {
         )
     }
 
-    private func logWindowTiming(
+    private static func logWindowTiming(
         index: Int,
         total: Int,
         window: TranscriptionWindow,
@@ -521,7 +683,7 @@ actor SherpaOnnxTranscriber {
         )
     }
 
-    private func logWindowTimingSummary(_ timingRecords: [TranscriptionWindowTiming]) {
+    private static func logWindowTimingSummary(_ timingRecords: [TranscriptionWindowTiming]) {
         guard !timingRecords.isEmpty else {
             return
         }
@@ -551,6 +713,45 @@ private struct SherpaOnnxEngine {
 private struct TranscriptionWindowTiming {
     let elapsed: TimeInterval
     let producedSubtitle: Bool
+}
+
+private final class ParallelTranscriptionState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completedWindowCount = 0
+    private var segmentResults: [SubtitleSegment?]
+    private var timingResults: [TranscriptionWindowTiming?]
+
+    init(windowCount: Int) {
+        self.segmentResults = Array<SubtitleSegment?>(repeating: nil, count: windowCount)
+        self.timingResults = Array<TranscriptionWindowTiming?>(repeating: nil, count: windowCount)
+    }
+
+    func record(index: Int, segment: SubtitleSegment?, timing: TranscriptionWindowTiming) -> Int {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        segmentResults[index] = segment
+        timingResults[index] = timing
+        completedWindowCount += 1
+        return completedWindowCount
+    }
+
+    var segments: [SubtitleSegment] {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        return segmentResults.compactMap { $0 }
+    }
+
+    var timingRecords: [TranscriptionWindowTiming] {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        return timingResults.compactMap { $0 }
+    }
 }
 
 enum SherpaOnnxTranscriberError: Error, LocalizedError {

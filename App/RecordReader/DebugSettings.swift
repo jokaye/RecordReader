@@ -5,6 +5,7 @@ enum DebugSettings {
     static let recognitionProviderKey = "debug.recognitionProvider"
     static let sherpaThreadCountKey = "debug.sherpaThreadCount"
     static let transcriptionWindowDurationKey = "debug.transcriptionWindowDuration"
+    static let transcriptionWorkerCountKey = "debug.transcriptionWorkerCount"
 
     static var recognitionProvider: RecognitionProvider {
         get {
@@ -48,6 +49,20 @@ enum DebugSettings {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: transcriptionWindowDurationKey)
+        }
+    }
+
+    static var transcriptionWorkerCount: TranscriptionWorkerCount {
+        get {
+            guard UserDefaults.standard.object(forKey: transcriptionWorkerCountKey) != nil else {
+                return .defaultValue
+            }
+            return TranscriptionWorkerCount(
+                rawValueOrDefault: UserDefaults.standard.integer(forKey: transcriptionWorkerCountKey)
+            )
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: transcriptionWorkerCountKey)
         }
     }
 }

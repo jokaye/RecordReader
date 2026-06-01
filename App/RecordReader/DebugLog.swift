@@ -102,11 +102,13 @@ private struct DebugRecognitionSettingsView: View {
     @AppStorage(DebugSettings.recognitionProviderKey) private var recognitionProviderRawValue = RecognitionProvider.defaultValue.rawValue
     @AppStorage(DebugSettings.sherpaThreadCountKey) private var sherpaThreadCountRawValue = SherpaThreadCount.defaultValue.rawValue
     @AppStorage(DebugSettings.transcriptionWindowDurationKey) private var transcriptionWindowDurationRawValue = TranscriptionWindowDuration.defaultValue.rawValue
+    @AppStorage(DebugSettings.transcriptionWorkerCountKey) private var transcriptionWorkerCountRawValue = TranscriptionWorkerCount.defaultValue.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             providerControl
             threadCountControl
+            workerCountControl
             windowDurationControl
         }
         .onChange(of: recognitionProviderRawValue) { _, newValue in
@@ -132,6 +134,14 @@ private struct DebugRecognitionSettingsView: View {
             }
             DebugSettings.transcriptionWindowDuration = duration
             DebugLog.shared.log("长音频识别窗口设置为 \(duration.rawValue) 秒，下次识别生效")
+        }
+        .onChange(of: transcriptionWorkerCountRawValue) { _, newValue in
+            let workerCount = TranscriptionWorkerCount(rawValueOrDefault: newValue)
+            if workerCount.rawValue != newValue {
+                transcriptionWorkerCountRawValue = workerCount.rawValue
+            }
+            DebugSettings.transcriptionWorkerCount = workerCount
+            DebugLog.shared.log("长音频并行识别设置为 \(workerCount.label)，下次识别生效")
         }
     }
 
@@ -188,6 +198,26 @@ private struct DebugRecognitionSettingsView: View {
             .pickerStyle(.segmented)
 
             Text("窗口越长开销越少，但字幕时间范围会更粗。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var workerCountControl: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("长音频并行数", systemImage: "square.stack.3d.up")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("长音频并行数", selection: $transcriptionWorkerCountRawValue) {
+                    ForEach(TranscriptionWorkerCount.allCases) { workerCount in
+                        Text(workerCount.label).tag(workerCount.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Text("并行窗口会增加内存占用；Auto 当前按 2 路并行测试。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
