@@ -1152,6 +1152,48 @@ Cloud verification:
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
 
+### 2026-06-01 M31: WhisperKit CoreML Experiment Branch Bootstrap
+
+Status: implemented locally, awaiting cloud verification.
+
+User direction:
+
+- Develop the WhisperKit CoreML path on `codex/whisperkit-coreml-experiment`, isolated from `main`.
+- Treat the path as high risk and avoid changing the stable mainline recognizer.
+
+Design:
+
+- Keep `main` untouched.
+- Add WhisperKit only to the experimental app target build.
+- Do not bundle or download Whisper models yet.
+- Do not route recognition through WhisperKit yet.
+- Add a small core enum that makes the experimental engine explicit and keeps `sherpa-onnx` as the default.
+- Trigger GitHub Actions for this experimental branch, but publish its IPA under a branch-specific release tag so it does not overwrite `main`'s `latest-unsigned-ipa`.
+
+Fix:
+
+- Created branch `codex/whisperkit-coreml-experiment` in an isolated worktree.
+- Added `ExperimentalTranscriptionEngine` with default `.sherpaOnnx` and experimental `.whisperKitCoreML`.
+- Added tests locking the experiment as available but non-default.
+- Added the `WhisperKit` product from `argmaxinc/argmax-oss-swift` at exact version `1.0.0`.
+- Added an app-target `WhisperKitExperimentProbe` compiled only under `WHISPERKIT_EXPERIMENT` so cloud builds prove the module can be imported.
+- Updated the branch workflow to run on `codex/whisperkit-coreml-experiment`.
+- Updated the release publishing step to use a branch-specific tag outside `main`.
+
+Local verification:
+
+- A focused red/green runner confirmed `ExperimentalTranscriptionEngine` was missing before implementation and available after implementation.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources passed with the sherpa-onnx bridging header using the existing local header cache.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.ExperimentalTranscriptionEngineTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Pending.
+
 ### 2026-06-01 M27: Playlist Record Deletion and Subtitle Display Modes
 
 Status: cloud verified.

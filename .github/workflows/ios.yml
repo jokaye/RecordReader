@@ -2,7 +2,7 @@ name: iOS
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/whisperkit-coreml-experiment]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -68,16 +68,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git tag -f latest-unsigned-ipa "$GITHUB_SHA"
-          git push -f origin latest-unsigned-ipa
+          RELEASE_TAG="latest-unsigned-ipa"
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            RELEASE_TAG="${GITHUB_REF_NAME//\//-}-unsigned-ipa"
+          fi
 
-          gh release create latest-unsigned-ipa build/RecordReader-unsigned.ipa \
+          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
+          git push -f origin "$RELEASE_TAG"
+
+          gh release create "$RELEASE_TAG" build/RecordReader-unsigned.ipa \
             --title "Latest unsigned IPA" \
             --notes "Unsigned IPA built from $GITHUB_SHA." \
             --latest=false \
-          || gh release upload latest-unsigned-ipa build/RecordReader-unsigned.ipa --clobber
+          || gh release upload "$RELEASE_TAG" build/RecordReader-unsigned.ipa --clobber
 
-          gh release edit latest-unsigned-ipa \
+          gh release edit "$RELEASE_TAG" \
             --title "Latest unsigned IPA" \
             --notes "Unsigned IPA built from $GITHUB_SHA." \
             --latest=false

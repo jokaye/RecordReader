@@ -9,6 +9,9 @@ settings:
 packages:
   RecordReader:
     path: .
+  ArgmaxOSS:
+    url: https://github.com/argmaxinc/argmax-oss-swift.git
+    exactVersion: 1.0.0
 targets:
   RecordReader:
     type: application
@@ -18,6 +21,8 @@ targets:
     dependencies:
       - package: RecordReader
         product: RecordReaderCore
+      - package: ArgmaxOSS
+        product: WhisperKit
       - framework: .build/sherpa-onnx-ios/build-ios/sherpa-onnx.xcframework
         embed: false
       - framework: .build/sherpa-onnx-ios/build-ios/ios-onnxruntime/onnxruntime.xcframework
@@ -25,6 +30,7 @@ targets:
     settings:
       GENERATE_INFOPLIST_FILE: YES
       SWIFT_VERSION: "5.9"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WHISPERKIT_EXPERIMENT"
       SWIFT_OBJC_BRIDGING_HEADER: App/RecordReader/SherpaOnnx/SherpaOnnx-Bridging-Header.h
       OTHER_LDFLAGS: "$(inherited) -lc++"
       HEADER_SEARCH_PATHS:
