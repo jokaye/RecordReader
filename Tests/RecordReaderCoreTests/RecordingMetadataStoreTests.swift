@@ -40,4 +40,19 @@ final class RecordingMetadataStoreTests: XCTestCase {
 
         XCTAssertEqual(try store.load(), .empty)
     }
+
+    func testStoreLoadsLegacyMetadataWithoutHiddenRecordingIDs() throws {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RecordReaderTests")
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("metadata.json")
+        try FileManager.default.createDirectory(
+            at: storeURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(#"{"records":{},"selectedFolderBookmark":null}"#.utf8).write(to: storeURL)
+        let store = RecordingMetadataStore(fileURL: storeURL)
+
+        XCTAssertEqual(try store.load().hiddenRecordingIDs, [])
+    }
 }

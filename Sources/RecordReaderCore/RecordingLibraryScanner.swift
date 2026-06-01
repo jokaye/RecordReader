@@ -127,6 +127,9 @@ public struct RecordingLibraryScanner {
             }
 
             let key = RecordingKey.make(for: url)
+            guard !metadata.hiddenRecordingIDs.contains(key) else {
+                return nil
+            }
             let recordMetadata = metadata.records[key]
             return Recording(
                 id: key,

@@ -3,13 +3,32 @@ import Foundation
 public struct RecordingLibraryMetadata: Codable, Equatable {
     public var records: [String: RecordingMetadata]
     public var selectedFolderBookmark: Data?
+    public var hiddenRecordingIDs: Set<String>
 
-    public init(records: [String: RecordingMetadata], selectedFolderBookmark: Data?) {
+    public init(
+        records: [String: RecordingMetadata],
+        selectedFolderBookmark: Data?,
+        hiddenRecordingIDs: Set<String> = []
+    ) {
         self.records = records
         self.selectedFolderBookmark = selectedFolderBookmark
+        self.hiddenRecordingIDs = hiddenRecordingIDs
     }
 
     public static let empty = RecordingLibraryMetadata(records: [:], selectedFolderBookmark: nil)
+
+    private enum CodingKeys: String, CodingKey {
+        case records
+        case selectedFolderBookmark
+        case hiddenRecordingIDs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        records = try container.decodeIfPresent([String: RecordingMetadata].self, forKey: .records) ?? [:]
+        selectedFolderBookmark = try container.decodeIfPresent(Data.self, forKey: .selectedFolderBookmark)
+        hiddenRecordingIDs = try container.decodeIfPresent(Set<String>.self, forKey: .hiddenRecordingIDs) ?? []
+    }
 }
 
 public struct RecordingMetadata: Codable, Equatable {

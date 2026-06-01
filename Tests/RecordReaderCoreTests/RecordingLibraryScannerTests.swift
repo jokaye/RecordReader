@@ -87,6 +87,24 @@ final class RecordingLibraryScannerTests: XCTestCase {
         XCTAssertEqual(recording.category, "Work")
     }
 
+    func testScannerSkipsDeletedRecordingRecordsWithoutDeletingFiles() throws {
+        let folder = try makeTemporaryFolder()
+        let hiddenURL = folder.appendingPathComponent("Hidden.mp3")
+        let visibleURL = folder.appendingPathComponent("Visible.mp3")
+        try Data("hidden".utf8).write(to: hiddenURL)
+        try Data("visible".utf8).write(to: visibleURL)
+        let metadata = RecordingLibraryMetadata(
+            records: [:],
+            selectedFolderBookmark: nil,
+            hiddenRecordingIDs: [RecordingKey.make(for: hiddenURL)]
+        )
+
+        let recordings = try scannerResult(folder: folder, metadata: metadata)
+
+        XCTAssertEqual(recordings.map(\.title), ["Visible"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: hiddenURL.path))
+    }
+
     private func scannerResult(
         folder: URL,
         metadata: RecordingLibraryMetadata

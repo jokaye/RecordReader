@@ -3,6 +3,8 @@ import SwiftUI
 
 struct SubtitlePanel: View {
     let recording: Recording
+    let currentTime: TimeInterval
+    @Binding var displayMode: SubtitleDisplayMode
     let errorMessage: String?
     let recognitionProgress: SubtitleRecognitionProgress?
 
@@ -19,23 +21,14 @@ struct SubtitlePanel: View {
             }
 
             if let subtitle = recording.subtitle, !subtitle.segments.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(subtitle.segments) { segment in
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(timeRange(segment))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.white.opacity(0.5))
-                                Text(segment.text)
-                                    .font(.body.weight(.medium))
-                                    .lineSpacing(4)
-                            }
-                            .padding(.vertical, 2)
-                            .transition(.opacity)
-                        }
+                Picker("字幕显示", selection: $displayMode) {
+                    ForEach(SubtitleDisplayMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .pickerStyle(.segmented)
+
+                subtitleList(subtitle.segments)
             } else {
                 Spacer()
                 VStack(spacing: 12) {
@@ -78,6 +71,77 @@ struct SubtitlePanel: View {
         )
         .animation(.easeOut(duration: 0.22), value: status)
         .animation(.easeOut(duration: 0.22), value: recording.subtitle?.segments.count ?? 0)
+    }
+
+    private func subtitleList(_ segments: [SubtitleSegment]) -> some View {
+        let activeSegmentID = SubtitleTimeline.activeSegment(in: segments, at: currentTime)?.id
+
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(segments) { segment in
+                        subtitleRow(segment, isActive: segment.id == activeSegmentID)
+                            .id(segment.id)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .onAppear {
+                scrollToActiveSegment(activeSegmentID, proxy: proxy, animated: false)
+            }
+            .onChange(of: activeSegmentID) { _, nextID in
+                guard displayMode == .follow else {
+                    return
+                }
+                scrollToActiveSegment(nextID, proxy: proxy, animated: true)
+            }
+            .onChange(of: displayMode) { _, mode in
+                guard mode == .follow else {
+                    return
+                }
+                scrollToActiveSegment(activeSegmentID, proxy: proxy, animated: true)
+            }
+        }
+    }
+
+    private func subtitleRow(_ segment: SubtitleSegment, isActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(timeRange(segment))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(isActive ? .white.opacity(0.76) : .white.opacity(0.5))
+            Text(segment.text)
+                .font(isActive ? .body.weight(.semibold) : .body.weight(.medium))
+                .foregroundStyle(isActive ? .white : .white.opacity(0.78))
+                .lineSpacing(4)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isActive && displayMode == .follow ? Color.white.opacity(0.14) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isActive && displayMode == .follow ? Color.white.opacity(0.22) : Color.clear, lineWidth: 1)
+        )
+        .transition(.opacity)
+    }
+
+    private func scrollToActiveSegment(
+        _ id: SubtitleSegment.ID?,
+        proxy: ScrollViewProxy,
+        animated: Bool
+    ) {
+        guard displayMode == .follow, let id else {
+            return
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+        } else {
+            proxy.scrollTo(id, anchor: .center)
+        }
     }
 
     private var status: SubtitleStatus {

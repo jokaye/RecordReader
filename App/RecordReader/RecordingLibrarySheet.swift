@@ -8,6 +8,8 @@ struct RecordingLibrarySheet: View {
     @State private var selectedIDs: Set<Recording.ID> = []
     @State private var isBatchCategoryPresented = false
     @State private var batchCategory = ""
+    @State private var pendingDeleteIDs: Set<Recording.ID> = []
+    @State private var isDeleteConfirmationPresented = false
 
     var body: some View {
         NavigationStack {
@@ -24,6 +26,13 @@ struct RecordingLibrarySheet: View {
                     ForEach(library.visibleRecordings) { recording in
                         recordingRow(recording)
                             .listRowBackground(rowBackground(for: recording))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    requestDelete(ids: [recording.id])
+                                } label: {
+                                    Label("删除记录", systemImage: "trash")
+                                }
+                            }
                     }
                 } header: {
                     Text(library.currentFilterTitle)
@@ -48,6 +57,18 @@ struct RecordingLibrarySheet: View {
                     finishBatchMode()
                 }
                 Button("取消", role: .cancel) {}
+            }
+            .confirmationDialog("删除播放记录？", isPresented: $isDeleteConfirmationPresented, titleVisibility: .visible) {
+                Button("删除记录", role: .destructive) {
+                    library.deleteRecordingRecords(ids: pendingDeleteIDs)
+                    finishBatchMode()
+                    pendingDeleteIDs = []
+                }
+                Button("取消", role: .cancel) {
+                    pendingDeleteIDs = []
+                }
+            } message: {
+                Text("只会从播放列表移除记录，不会删除原始音频文件。")
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -159,11 +180,19 @@ struct RecordingLibrarySheet: View {
 
                 Spacer()
 
-                Button {
-                    batchCategory = ""
-                    isBatchCategoryPresented = true
+                    Button {
+                        batchCategory = ""
+                        isBatchCategoryPresented = true
+                    } label: {
+                        Label("分类", systemImage: "tag")
+                    }
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    requestDelete(ids: selectedIDs)
                 } label: {
-                    Label("分类", systemImage: "tag")
+                    Label("删除", systemImage: "trash")
                 }
             }
         }
@@ -184,6 +213,14 @@ struct RecordingLibrarySheet: View {
         } label: {
             Label(title, systemImage: systemImage)
         }
+    }
+
+    private func requestDelete(ids: Set<Recording.ID>) {
+        guard !ids.isEmpty else {
+            return
+        }
+        pendingDeleteIDs = ids
+        isDeleteConfirmationPresented = true
     }
 
     private func rowBackground(for recording: Recording) -> Color {

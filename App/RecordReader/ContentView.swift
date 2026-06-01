@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
     @State private var seekDraftProgress: Double?
+    @State private var subtitleDisplayMode: SubtitleDisplayMode = .follow
 
     var body: some View {
         GeometryReader { geometry in
@@ -84,6 +85,8 @@ struct ContentView: View {
         .onChange(of: library.selectedRecording?.id) { _, _ in
             if let selected = library.selectedRecording {
                 player.load(url: selected.url)
+            } else {
+                player.unload()
             }
         }
     }
@@ -162,6 +165,8 @@ struct ContentView: View {
         VStack(spacing: 24) {
             SubtitlePanel(
                 recording: recording,
+                currentTime: player.currentTime,
+                displayMode: $subtitleDisplayMode,
                 errorMessage: library.errorMessage,
                 recognitionProgress: library.subtitleRecognitionProgress
             )

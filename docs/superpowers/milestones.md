@@ -1147,3 +1147,45 @@ Local verification:
 Cloud verification:
 
 - Pending.
+
+### 2026-06-01 M27: Playlist Record Deletion and Subtitle Display Modes
+
+Status: implemented locally, awaiting cloud verification.
+
+User direction:
+
+- Audio records in the playback list can be deleted from the app without deleting the original audio file.
+- The subtitle tab should let users switch between subtitles following the playback timeline and showing all subtitle text.
+
+Design:
+
+- Treat deletion as an app-library metadata operation, not a filesystem operation.
+- Persist deleted playback records as hidden recording IDs so folder refresh does not immediately re-add the same file.
+- Keep the original file untouched.
+- Reuse the existing subtitle document model and add a lightweight display mode: `跟随播放` / `全部字幕`.
+- In follow mode, the subtitle list highlights and scrolls to the segment matching `PlayerController.currentTime`.
+
+Fix:
+
+- Added `RecordingLibraryMetadata.hiddenRecordingIDs` with backwards-compatible decoding for older metadata files.
+- `RecordingLibraryScanner` now skips hidden recording IDs.
+- `AudioLibraryViewModel.deleteRecordingRecords(ids:)` removes records from the app list, clears stored metadata for those IDs, and persists the hidden IDs.
+- `RecordingLibrarySheet` now supports swipe-to-delete for one record and batch delete from selection mode, with a confirmation that original files are not deleted.
+- Added `SubtitleDisplayMode` and `SubtitleTimeline.activeSegment(in:at:)` in `RecordReaderCore`.
+- `SubtitlePanel` now includes a segmented subtitle display picker and follows playback time in follow mode.
+- `PlayerController.unload()` clears playback state when the current selected record is removed and no replacement selection exists.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- A focused scanner runner confirmed a hidden MP3 is excluded from app records while the file remains on disk.
+- A focused subtitle timeline runner confirmed active subtitle lookup and display mode labels.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Pending.

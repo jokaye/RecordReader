@@ -221,6 +221,35 @@ final class AudioLibraryViewModel: ObservableObject {
         }
     }
 
+    func deleteRecordingRecords(ids: Set<Recording.ID>) {
+        guard !ids.isEmpty else {
+            errorMessage = "请先选择要删除记录的录音。"
+            return
+        }
+        let existingIDs = Set(recordings.map(\.id))
+        let removableIDs = ids.intersection(existingIDs)
+        guard !removableIDs.isEmpty else {
+            errorMessage = "没有找到可删除的播放记录。"
+            return
+        }
+
+        let selectedID = selectedRecording?.id
+        for id in removableIDs {
+            metadata.hiddenRecordingIDs.insert(id)
+            metadata.records[id] = nil
+        }
+
+        do {
+            try persistMetadata()
+            recordings.removeAll { removableIDs.contains($0.id) }
+            preserveSelectionAfterDeleting(selectedID: selectedID, deletedIDs: removableIDs)
+            statusMessage = "已删除 \(removableIDs.count) 条播放记录，原始文件未删除"
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func recognizeSubtitleForSelectedRecording() {
         guard let selectedRecording else {
             errorMessage = "请先选择一段录音，再识别字幕。"
@@ -574,6 +603,14 @@ final class AudioLibraryViewModel: ObservableObject {
         if !visibleRecordings.contains(where: { $0.id == selectedRecording.id }) {
             self.selectedRecording = visibleRecordings.first
         }
+    }
+
+    private func preserveSelectionAfterDeleting(selectedID: Recording.ID?, deletedIDs: Set<Recording.ID>) {
+        guard let selectedID, deletedIDs.contains(selectedID) else {
+            preserveSelectionOrSelectFirstVisible()
+            return
+        }
+        selectedRecording = visibleRecordings.first
     }
 
     private func singleSelectedFolder(from urls: [URL]) -> URL? {

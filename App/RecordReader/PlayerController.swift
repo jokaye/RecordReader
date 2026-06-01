@@ -72,6 +72,17 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
         }
     }
 
+    func unload() {
+        stopTimer()
+        player?.stop()
+        player = nil
+        loadedURL = nil
+        currentTime = 0
+        duration = 0
+        isPlaying = false
+        releaseSecurityScope()
+    }
+
     func playPause() {
         guard let player else {
             errorMessage = "请先选择一段录音再播放。"
