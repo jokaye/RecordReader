@@ -923,3 +923,39 @@ Manual follow-up:
 - On a real iPhone, compare CPU and CoreML with the same file, same thread count, and same window length.
 - Record first-run and second-run timings separately because CoreML compile/cache behavior can distort the first run.
 - Keep CPU as the product default unless CoreML improves repeat-run total time by at least 15 percent without subtitle quality loss.
+
+### 2026-06-01 M25.1: CoreML Empty Result CPU Retry
+
+Status: implemented locally, awaiting cloud verification.
+
+User report:
+
+- CoreML experimental provider opens normally, but it does not recognize human speech from the audio file.
+
+Diagnosis:
+
+- The CoreML path already retried CPU when the provider threw an error.
+- It did not retry CPU when CoreML returned successfully with zero subtitle segments.
+- That is a plausible CoreML EP failure mode for this Paraformer ONNX model: the runtime can load and run, but the decoded text may be empty for every window.
+
+Fix:
+
+- Added explicit retry policy to `RecognitionProvider`.
+- CoreML now retries CPU both on provider failure and on an empty recognition result.
+- CPU remains the default and does not retry itself on empty results.
+- Added tests covering the provider retry policy.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- A focused `swiftc -typecheck` snippet confirmed the new provider retry policy API is available.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.RecognitionProviderTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Pending.

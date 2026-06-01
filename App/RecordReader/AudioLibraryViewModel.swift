@@ -294,24 +294,47 @@ final class AudioLibraryViewModel: ObservableObject {
                     self?.setSubtitleRecognitionProgress(progress, for: id)
                 }
             }
+            if recognitionProvider.shouldRetryCPUWhenRecognitionIsEmpty, segments.isEmpty {
+                DebugLog.shared.log("CoreML 后端未产出字幕，正在回退 CPU 重新识别")
+                return try await transcribeWithSherpaCPU(
+                    url: url,
+                    id: id,
+                    threadCount: threadCount,
+                    windowDuration: windowDuration
+                )
+            }
             return (segments, recognitionProvider)
         } catch {
-            guard recognitionProvider == .coreML else {
+            guard recognitionProvider.shouldRetryCPUOnProviderFailure else {
                 throw error
             }
             DebugLog.shared.log("CoreML 后端失败：\(error.localizedDescription)，正在回退 CPU")
-            let segments = try await sherpaTranscriber.transcribe(
+            return try await transcribeWithSherpaCPU(
                 url: url,
+                id: id,
                 threadCount: threadCount,
-                windowDuration: windowDuration,
-                recognitionProvider: .cpu
-            ) { [weak self] progress in
-                Task { @MainActor in
-                    self?.setSubtitleRecognitionProgress(progress, for: id)
-                }
-            }
-            return (segments, .cpu)
+                windowDuration: windowDuration
+            )
         }
+    }
+
+    private func transcribeWithSherpaCPU(
+        url: URL,
+        id: Recording.ID,
+        threadCount: SherpaThreadCount,
+        windowDuration: TranscriptionWindowDuration
+    ) async throws -> (segments: [SubtitleSegment], provider: RecognitionProvider) {
+        let segments = try await sherpaTranscriber.transcribe(
+            url: url,
+            threadCount: threadCount,
+            windowDuration: windowDuration,
+            recognitionProvider: .cpu
+        ) { [weak self] progress in
+            Task { @MainActor in
+                self?.setSubtitleRecognitionProgress(progress, for: id)
+            }
+        }
+        return (segments, .cpu)
     }
 
     private func recognizeWithAppleSpeech(url: URL, id: Recording.ID, primaryError: Error? = nil) {

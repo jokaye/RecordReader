@@ -17,4 +17,14 @@ final class RecognitionProviderTests: XCTestCase {
         XCTAssertEqual(RecognitionProvider.cpu.logLabel, "CPU")
         XCTAssertEqual(RecognitionProvider.coreML.logLabel, "CoreML(实验)")
     }
+
+    func testOnlyExperimentalCoreMLProviderRetriesCPUOnEmptyRecognitionResult() {
+        XCTAssertFalse(RecognitionProvider.cpu.shouldRetryCPUWhenRecognitionIsEmpty)
+        XCTAssertTrue(RecognitionProvider.coreML.shouldRetryCPUWhenRecognitionIsEmpty)
+    }
+
+    func testOnlyExperimentalCoreMLProviderRetriesCPUOnProviderFailure() {
+        XCTAssertFalse(RecognitionProvider.cpu.shouldRetryCPUOnProviderFailure)
+        XCTAssertTrue(RecognitionProvider.coreML.shouldRetryCPUOnProviderFailure)
+    }
 }

@@ -31,4 +31,12 @@ public enum RecognitionProvider: String, CaseIterable, Equatable, Identifiable {
             return "CoreML(实验)"
         }
     }
+
+    public var shouldRetryCPUWhenRecognitionIsEmpty: Bool {
+        self == .coreML
+    }
+
+    public var shouldRetryCPUOnProviderFailure: Bool {
+        self == .coreML
+    }
 }
