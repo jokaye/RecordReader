@@ -53,13 +53,11 @@ final class DebugLog: ObservableObject {
 struct DebugLogView: View {
     @ObservedObject var log = DebugLog.shared
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(DebugSettings.sherpaThreadCountKey) private var sherpaThreadCountRawValue = SherpaThreadCount.defaultValue.rawValue
-    @AppStorage(DebugSettings.transcriptionWindowDurationKey) private var transcriptionWindowDurationRawValue = TranscriptionWindowDuration.defaultValue.rawValue
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                threadSettings
+                DebugRecognitionSettingsView()
                     .padding(.horizontal, 16)
                     .padding(.top, 14)
                     .padding(.bottom, 12)
@@ -78,22 +76,6 @@ struct DebugLogView: View {
                     }
                     .onChange(of: log.entries.count) { _, _ in
                         proxy.scrollTo("logBottom", anchor: .bottom)
-                    }
-                    .onChange(of: sherpaThreadCountRawValue) { _, newValue in
-                        let threadCount = SherpaThreadCount(rawValueOrDefault: newValue)
-                        if threadCount.rawValue != newValue {
-                            sherpaThreadCountRawValue = threadCount.rawValue
-                        }
-                        DebugSettings.sherpaThreadCount = threadCount
-                        DebugLog.shared.log("本地识别线程数设置为 \(threadCount.label)，下次识别生效")
-                    }
-                    .onChange(of: transcriptionWindowDurationRawValue) { _, newValue in
-                        let duration = TranscriptionWindowDuration(rawValueOrDefault: newValue)
-                        if duration.rawValue != newValue {
-                            transcriptionWindowDurationRawValue = duration.rawValue
-                        }
-                        DebugSettings.transcriptionWindowDuration = duration
-                        DebugLog.shared.log("长音频识别窗口设置为 \(duration.rawValue) 秒，下次识别生效")
                     }
                 }
             }
@@ -114,48 +96,70 @@ struct DebugLogView: View {
             }
         }
     }
+}
 
-    private var threadSettings: some View {
+private struct DebugRecognitionSettingsView: View {
+    @AppStorage(DebugSettings.sherpaThreadCountKey) private var sherpaThreadCountRawValue = SherpaThreadCount.defaultValue.rawValue
+    @AppStorage(DebugSettings.transcriptionWindowDurationKey) private var transcriptionWindowDurationRawValue = TranscriptionWindowDuration.defaultValue.rawValue
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack {
-                    Label("本地识别线程数", systemImage: "cpu")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Menu(selectedThreadCount.label) {
-                        ForEach(SherpaThreadCount.allCases) { threadCount in
-                            Button(threadCount.label) {
-                                sherpaThreadCountRawValue = threadCount.rawValue
-                            }
-                        }
-                    }
-                    .font(.subheadline.weight(.semibold))
-                }
-
-                Text("用于真机性能测试，改动后下次识别生效。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            threadCountControl
+            windowDurationControl
+        }
+        .onChange(of: sherpaThreadCountRawValue) { _, newValue in
+            let threadCount = SherpaThreadCount(rawValueOrDefault: newValue)
+            if threadCount.rawValue != newValue {
+                sherpaThreadCountRawValue = threadCount.rawValue
             }
-
-            VStack(alignment: .leading, spacing: 9) {
-                Label("长音频窗口长度", systemImage: "waveform.path")
-                    .font(.subheadline.weight(.semibold))
-
-                Picker("长音频窗口长度", selection: $transcriptionWindowDurationRawValue) {
-                    ForEach(TranscriptionWindowDuration.allCases) { duration in
-                        Text(duration.label).tag(duration.rawValue)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                Text("窗口越长开销越少，但字幕时间范围会更粗。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            DebugSettings.sherpaThreadCount = threadCount
+            DebugLog.shared.log("本地识别线程数设置为 \(threadCount.label)，下次识别生效")
+        }
+        .onChange(of: transcriptionWindowDurationRawValue) { _, newValue in
+            let duration = TranscriptionWindowDuration(rawValueOrDefault: newValue)
+            if duration.rawValue != newValue {
+                transcriptionWindowDurationRawValue = duration.rawValue
             }
+            DebugSettings.transcriptionWindowDuration = duration
+            DebugLog.shared.log("长音频识别窗口设置为 \(duration.rawValue) 秒，下次识别生效")
         }
     }
 
-    private var selectedThreadCount: SherpaThreadCount {
-        SherpaThreadCount(rawValueOrDefault: sherpaThreadCountRawValue)
+    private var threadCountControl: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("本地识别线程数", systemImage: "cpu")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("本地识别线程数", selection: $sherpaThreadCountRawValue) {
+                    ForEach(SherpaThreadCount.allCases) { threadCount in
+                        Text(threadCount.label).tag(threadCount.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Text("用于真机性能测试，改动后下次识别生效。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var windowDurationControl: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label("长音频窗口长度", systemImage: "waveform.path")
+                .font(.subheadline.weight(.semibold))
+
+            Picker("长音频窗口长度", selection: $transcriptionWindowDurationRawValue) {
+                ForEach(TranscriptionWindowDuration.allCases) { duration in
+                    Text(duration.label).tag(duration.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text("窗口越长开销越少，但字幕时间范围会更粗。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
