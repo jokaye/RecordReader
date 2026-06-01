@@ -14,6 +14,21 @@ actor WhisperKitTranscriber {
     ) async throws -> [SubtitleSegment] {
         progress(.readingAudio)
         let startedAt = Date()
+        let didStartScope = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartScope {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        let preparedAudio = try PathBasedAudioInputPreparer.prepareStableReadableFile(
+            from: url,
+            in: Self.temporaryAudioInputDirectory()
+        )
+        defer {
+            try? FileManager.default.removeItem(at: preparedAudio.url)
+        }
+        DebugLog.shared.log("WhisperKit 输入已准备：源=\(url.lastPathComponent)，临时文件=\(preparedAudio.url.lastPathComponent)，securityScope=\(didStartScope ? "已获取" : "未获取")")
+
         let engine = try await loadEngine(modelVariant: modelVariant)
         progress(.recognizing(completedSegments: 0, totalSegments: nil))
 
@@ -29,7 +44,7 @@ actor WhisperKitTranscriber {
             chunkingStrategy: .vad
         )
         let results = try await engine.transcribe(
-            audioPath: url.path,
+            audioPath: preparedAudio.url.path,
             decodeOptions: options
         )
         let segments = Self.subtitleSegments(from: results)
@@ -118,6 +133,15 @@ actor WhisperKitTranscriber {
         return applicationSupport
             .appendingPathComponent("RecordReader", isDirectory: true)
             .appendingPathComponent("WhisperKitModels", isDirectory: true)
+    }
+
+    private static func temporaryAudioInputDirectory() -> URL {
+        FileManager.default.urls(
+            for: .cachesDirectory,
+            in: .userDomainMask
+        )[0]
+        .appendingPathComponent("RecordReader", isDirectory: true)
+        .appendingPathComponent("WhisperKitAudioInputs", isDirectory: true)
     }
 }
 

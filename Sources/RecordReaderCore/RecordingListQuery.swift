@@ -69,6 +69,30 @@ public enum RecordingListQuery {
         sortRecordings(recordings, by: sort).first
     }
 
+    public static func recordingsByApplyingMetadata(
+        _ metadata: RecordingMetadata,
+        to id: Recording.ID,
+        in recordings: [Recording]
+    ) -> [Recording] {
+        recordings.map { recording in
+            guard recording.id == id else {
+                return recording
+            }
+            return recordingByApplyingMetadata(metadata, to: recording)
+        }
+    }
+
+    public static func recordingByApplyingMetadata(
+        _ metadata: RecordingMetadata,
+        to recording: Recording
+    ) -> Recording {
+        var updatedRecording = recording
+        updatedRecording.isFavorite = metadata.isFavorite
+        updatedRecording.category = metadata.category
+        updatedRecording.subtitle = metadata.subtitle
+        return updatedRecording
+    }
+
     private static func matches(filter: RecordingFilter, recording: Recording) -> Bool {
         switch filter {
         case .all:
