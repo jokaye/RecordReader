@@ -1,5 +1,6 @@
 import Foundation
 import os
+import RecordReaderCore
 import SwiftUI
 import UIKit
 
@@ -52,20 +53,39 @@ final class DebugLog: ObservableObject {
 struct DebugLogView: View {
     @ObservedObject var log = DebugLog.shared
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(DebugSettings.sherpaThreadCountKey) private var sherpaThreadCountRawValue = SherpaThreadCount.defaultValue.rawValue
 
     var body: some View {
         NavigationStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(log.entries.isEmpty ? "暂无日志。点击导入按钮后再回来查看。" : log.text)
-                        .font(.system(.footnote, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding()
-                        .id("logBottom")
-                }
-                .onChange(of: log.entries.count) { _, _ in
-                    proxy.scrollTo("logBottom", anchor: .bottom)
+            VStack(spacing: 0) {
+                threadSettings
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 12)
+                    .background(Color(uiColor: .systemBackground))
+
+                Divider()
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Text(log.entries.isEmpty ? "暂无日志。点击导入按钮后再回来查看。" : log.text)
+                            .font(.system(.footnote, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                            .padding()
+                            .id("logBottom")
+                    }
+                    .onChange(of: log.entries.count) { _, _ in
+                        proxy.scrollTo("logBottom", anchor: .bottom)
+                    }
+                    .onChange(of: sherpaThreadCountRawValue) { _, newValue in
+                        let threadCount = SherpaThreadCount(rawValueOrDefault: newValue)
+                        if threadCount.rawValue != newValue {
+                            sherpaThreadCountRawValue = threadCount.rawValue
+                        }
+                        DebugSettings.sherpaThreadCount = threadCount
+                        DebugLog.shared.log("本地识别线程数设置为 \(threadCount.rawValue)，下次识别生效")
+                    }
                 }
             }
             .navigationTitle("调试日志")
@@ -83,6 +103,30 @@ struct DebugLogView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var threadSettings: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("本地识别线程数", systemImage: "cpu")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("A/B")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Picker("本地识别线程数", selection: $sherpaThreadCountRawValue) {
+                ForEach(SherpaThreadCount.allCases) { threadCount in
+                    Text(threadCount.label).tag(threadCount.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text("用于真机性能测试，改动后下次识别生效。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

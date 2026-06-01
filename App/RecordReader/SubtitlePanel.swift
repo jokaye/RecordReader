@@ -4,6 +4,7 @@ import SwiftUI
 struct SubtitlePanel: View {
     let recording: Recording
     let errorMessage: String?
+    let recognitionProgress: SubtitleRecognitionProgress?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -39,15 +40,20 @@ struct SubtitlePanel: View {
                 Spacer()
                 VStack(spacing: 12) {
                     if status == .recognizing {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(1.08)
+                        recognitionProgressView
                     }
-                    Text(statusMessage)
+                    Text(primaryStatusMessage)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.76))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
+                    if let secondaryStatusMessage {
+                        Text(secondaryStatusMessage)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.56))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 Spacer()
@@ -122,11 +128,40 @@ struct SubtitlePanel: View {
         case .notStarted:
             return "点击更多操作，为这段录音识别中文字幕。"
         case .recognizing:
-            return "正在读取录音并生成中文字幕。"
+            return recognitionProgress?.detail ?? "正在读取录音并生成中文字幕。"
         case .ready:
             return "没有识别出字幕文本。"
         case .failed:
             return recording.subtitle?.errorMessage ?? "中文语音识别未能完成。"
+        }
+    }
+
+    private var primaryStatusMessage: String {
+        guard status == .recognizing, let recognitionProgress else {
+            return statusMessage
+        }
+        return recognitionProgress.title
+    }
+
+    private var secondaryStatusMessage: String? {
+        guard status == .recognizing else {
+            return nil
+        }
+        return statusMessage
+    }
+
+    @ViewBuilder
+    private var recognitionProgressView: some View {
+        if let fraction = recognitionProgress?.fractionCompleted {
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .tint(.white.opacity(0.86))
+                .frame(maxWidth: 220)
+                .controlSize(.small)
+        } else {
+            ProgressView()
+                .tint(.white)
+                .scaleEffect(1.08)
         }
     }
 

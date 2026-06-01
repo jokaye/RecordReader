@@ -11,6 +11,7 @@ final class AudioLibraryViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var statusMessage: String?
     @Published private(set) var isLoading = false
+    @Published private(set) var subtitleRecognitionProgress: SubtitleRecognitionProgress?
     @Published var searchText = ""
     @Published var sort: RecordingSort = .nameAscending
 
@@ -21,6 +22,7 @@ final class AudioLibraryViewModel: ObservableObject {
     private var metadata: RecordingLibraryMetadata
     private var selectedSources: [URL] = []
     private var activeSecurityScopedURLs: [URL] = []
+    private var activeSubtitleRecognitionID: Recording.ID?
 
     init(
         scanner: RecordingLibraryScanner = RecordingLibraryScanner(),
@@ -113,6 +115,9 @@ final class AudioLibraryViewModel: ObservableObject {
 
     func select(_ recording: Recording) {
         selectedRecording = recording
+        if activeSubtitleRecognitionID != recording.id {
+            subtitleRecognitionProgress = nil
+        }
     }
 
     func setFilter(_ filter: RecordingFilter) {
@@ -222,19 +227,29 @@ final class AudioLibraryViewModel: ObservableObject {
         }
         let id = selectedRecording.id
         let url = selectedRecording.url
+        let threadCount = DebugSettings.sherpaThreadCount
+        activeSubtitleRecognitionID = id
+        subtitleRecognitionProgress = .readingAudio
         setSubtitle(
             SubtitleDocument(status: .recognizing, segments: [], errorMessage: nil),
             for: id
         )
         statusMessage = "正在用本地中文模型识别字幕…"
-        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)")
+        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，线程数=\(threadCount.rawValue)")
 
         Task { [weak self] in
             guard let self else {
                 return
             }
             do {
-                let segments = try await self.sherpaTranscriber.transcribe(url: url)
+                let segments = try await self.sherpaTranscriber.transcribe(
+                    url: url,
+                    threadCount: threadCount
+                ) { [weak self] progress in
+                    Task { @MainActor in
+                        self?.setSubtitleRecognitionProgress(progress, for: id)
+                    }
+                }
                 DebugLog.shared.log("sherpa-onnx 完成：\(segments.count) 段字幕")
                 if segments.isEmpty {
                     self.setSubtitle(
@@ -242,12 +257,14 @@ final class AudioLibraryViewModel: ObservableObject {
                         for: id
                     )
                     self.statusMessage = "未识别到语音"
+                    self.clearSubtitleRecognitionProgress(for: id)
                 } else {
                     self.setSubtitle(
                         SubtitleDocument(status: .ready, segments: segments, errorMessage: nil),
                         for: id
                     )
                     self.statusMessage = "字幕已生成（本地中文模型）"
+                    self.clearSubtitleRecognitionProgress(for: id)
                 }
             } catch {
                 DebugLog.shared.log("sherpa-onnx 失败：\(error.localizedDescription)，回退到 iOS Speech")
@@ -258,6 +275,7 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private func recognizeWithAppleSpeech(url: URL, id: Recording.ID, primaryError: Error? = nil) {
+        setSubtitleRecognitionProgress(.fallback, for: id)
         transcriber.transcribe(url: url) { [weak self] result in
             Task { @MainActor in
                 guard let self else {
@@ -267,6 +285,7 @@ final class AudioLibraryViewModel: ObservableObject {
                 case .success(let subtitle):
                     self.setSubtitle(subtitle, for: id)
                     self.statusMessage = "字幕已生成（iOS Speech）"
+                    self.clearSubtitleRecognitionProgress(for: id)
                 case .failure(let error):
                     let message: String
                     if let primaryError {
@@ -279,6 +298,7 @@ final class AudioLibraryViewModel: ObservableObject {
                         for: id
                     )
                     self.errorMessage = message
+                    self.clearSubtitleRecognitionProgress(for: id)
                 }
             }
         }
@@ -411,6 +431,21 @@ final class AudioLibraryViewModel: ObservableObject {
         )
         record.subtitle = subtitle
         updateMetadata(record, for: id)
+    }
+
+    private func setSubtitleRecognitionProgress(_ progress: SubtitleRecognitionProgress, for id: Recording.ID) {
+        guard activeSubtitleRecognitionID == id else {
+            return
+        }
+        subtitleRecognitionProgress = progress
+    }
+
+    private func clearSubtitleRecognitionProgress(for id: Recording.ID) {
+        guard activeSubtitleRecognitionID == id else {
+            return
+        }
+        subtitleRecognitionProgress = nil
+        activeSubtitleRecognitionID = nil
     }
 
     private func persistMetadata() throws {

@@ -160,7 +160,11 @@ struct ContentView: View {
 
     private func playerContent(_ recording: Recording, subtitlePanelHeight: CGFloat) -> some View {
         VStack(spacing: 24) {
-            SubtitlePanel(recording: recording, errorMessage: library.errorMessage)
+            SubtitlePanel(
+                recording: recording,
+                errorMessage: library.errorMessage,
+                recognitionProgress: library.subtitleRecognitionProgress
+            )
                 .frame(maxWidth: .infinity)
                 .frame(height: subtitlePanelHeight)
                 .id(recording.id)
