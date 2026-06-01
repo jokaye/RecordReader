@@ -1202,7 +1202,7 @@ Cloud verification:
 
 ### 2026-06-01 M32: Debug-only WhisperKit File Recognition POC
 
-Status: implemented locally, awaiting cloud verification.
+Status: cloud verified.
 
 User direction:
 
@@ -1239,7 +1239,13 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `2ff3b9a` passed the full `iOS` workflow on `codex/whisperkit-coreml-experiment`.
+- The workflow published its IPA under branch-specific tag `codex-whisperkit-coreml-experiment-unsigned-ipa`, leaving `main`'s `latest-unsigned-ipa` untouched.
+- Latest experiment IPA was downloaded locally to `.build/github-artifacts/RecordReader-whisperkit-experiment-unsigned.ipa` at `2026-06-01 17:05:00 +0800`.
+- Local downloaded IPA digest: `sha256:4218ab19daa55c8db9141d2d3bf076cf555e1db4e0dcc47f11840ee058631111`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
+- No Whisper `.mlmodel` or `.mlmodelc` files are bundled. WhisperKit models are downloaded at runtime into Application Support when the Debug engine is selected.
 
 ### 2026-06-01 M27: Playlist Record Deletion and Subtitle Display Modes
 
