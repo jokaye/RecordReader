@@ -1119,18 +1119,19 @@ Design:
 - Only parallelize the long-audio full-coverage fixed-window path.
 - Keep short-audio VAD recognition unchanged.
 - Use one `SherpaOnnxOfflineRecognizer` per worker instead of sharing a recognizer across threads.
-- Keep worker count bounded to `Auto / 1 / 2 / 3`; `Auto` means 2 workers on standard devices and 3 workers on high-tier iPhones.
-- Device-aware Auto raises high-tier iPhones to 3 workers. High-tier currently means iPhone 14 Pro / 14 Pro Max (`iPhone15,2` / `iPhone15,3`) or newer.
+- Keep worker count bounded to `Auto / 1 / 2 / 3`; `Auto` now means the stable serial path after real-device testing showed parallel workers were slower.
+- Device profiling remains logged for diagnostics, but it no longer raises Auto worker count.
 
 Fix:
 
 - Added `TranscriptionWorkerCount` in `RecordReaderCore`.
-- Added `TranscriptionPerformanceTier` and `DeviceProfile` so Auto can use 3 workers on iPhone 14 Pro / Pro Max or newer devices.
+- Added `TranscriptionPerformanceTier` and `DeviceProfile` for diagnostics, then disabled device-tier Auto scaling after real-device results showed it was a negative optimization.
 - Added Debug setting `长音频并行数` with `Auto / 1 / 2 / 3`.
 - `AudioLibraryViewModel` now passes the selected worker count into `SherpaOnnxTranscriber`.
 - `SherpaOnnxTranscriber` now runs long-audio fixed windows in parallel when the effective worker count is greater than 1.
 - Parallel output preserves subtitle ordering by writing results back to the original window index before merging.
 - Logs now include the selected parallel count and the effective worker count used for long-audio recognition.
+- Real-device feedback showed enabling parallel recognition raised the 664-second baseline from about 40 seconds to more than 50 seconds. Root cause is consistent with multiple recognizers, full-file buffering, per-window sample copies, and CPU/memory contention. Auto was changed back to serial, while manual 2/3 worker modes remain Debug-only experiments.
 
 Local verification:
 

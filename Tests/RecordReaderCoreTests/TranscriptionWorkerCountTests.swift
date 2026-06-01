@@ -13,14 +13,14 @@ final class TranscriptionWorkerCountTests: XCTestCase {
         XCTAssertEqual(TranscriptionWorkerCount(rawValueOrDefault: -1), .auto)
     }
 
-    func testEffectiveWorkerCountIsBoundedByAvailableWindows() {
+    func testAutoUsesStableSerialPathAndManualCountsAreBounded() {
         XCTAssertEqual(
             TranscriptionWorkerCount.auto.effectiveWorkerCount(totalWindows: 19, performanceTier: .standard),
-            2
+            1
         )
         XCTAssertEqual(
             TranscriptionWorkerCount.auto.effectiveWorkerCount(totalWindows: 19, performanceTier: .high),
-            3
+            1
         )
         XCTAssertEqual(
             TranscriptionWorkerCount.auto.effectiveWorkerCount(totalWindows: 1, performanceTier: .high),

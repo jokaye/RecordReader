@@ -217,7 +217,7 @@ private struct DebugRecognitionSettingsView: View {
                 .pickerStyle(.menu)
             }
 
-            Text("并行窗口会增加内存占用；Auto 当前按 2 路并行测试。")
+            Text("Auto 使用稳定串行路径；2/3 路仅用于 Debug 性能实验。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

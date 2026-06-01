@@ -59,7 +59,7 @@ public enum TranscriptionWorkerCount: Int, CaseIterable, Equatable, Identifiable
         let requested: Int
         switch self {
         case .auto:
-            requested = performanceTier == .high ? 3 : 2
+            requested = 1
         case .one, .two, .three:
             requested = rawValue
         }
