@@ -56,4 +56,36 @@ final class ExperimentalTranscriptionEngineTests: XCTestCase {
         XCTAssertFalse(settings.usesVADChunking)
         XCTAssertTrue(settings.usesPrefillPrompt)
     }
+
+    func testWhisperKitQualityGateRejectsHighCompressionRepetition() {
+        let reason = WhisperKitTranscriptionQualityGate.qualityFirstChinese.rejectionReason(
+            segmentTexts: Array(repeating: "(小聲點)", count: 12) + ["正常内容"],
+            averageLogProbability: -0.42,
+            averageCompressionRatio: 9.42
+        )
+
+        XCTAssertNotNil(reason)
+        XCTAssertTrue(reason?.contains("压缩率") == true)
+    }
+
+    func testWhisperKitQualityGateRejectsLowAverageLogProbability() {
+        let reason = WhisperKitTranscriptionQualityGate.qualityFirstChinese.rejectionReason(
+            segmentTexts: ["今天我们讨论录音播放器", "字幕会跟随时间轴显示"],
+            averageLogProbability: -1.2,
+            averageCompressionRatio: 1.8
+        )
+
+        XCTAssertNotNil(reason)
+        XCTAssertTrue(reason?.contains("可信度") == true)
+    }
+
+    func testWhisperKitQualityGateAcceptsVariedReasonableSegments() {
+        let reason = WhisperKitTranscriptionQualityGate.qualityFirstChinese.rejectionReason(
+            segmentTexts: ["今天我们讨论录音播放器", "字幕会跟随时间轴显示", "后续继续优化识别速度"],
+            averageLogProbability: -0.42,
+            averageCompressionRatio: 1.8
+        )
+
+        XCTAssertNil(reason)
+    }
 }

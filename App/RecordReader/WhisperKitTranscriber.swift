@@ -56,7 +56,15 @@ actor WhisperKitTranscriber {
             decodeOptions: options
         )
         let segments = Self.subtitleSegments(from: results)
-        Self.logTranscriptionDiagnostics(results, modelVariant: modelVariant)
+        let diagnostics = Self.transcriptionDiagnostics(results)
+        Self.logTranscriptionDiagnostics(diagnostics, modelVariant: modelVariant)
+        if let rejectionReason = WhisperKitTranscriptionQualityGate.qualityFirstChinese.rejectionReason(
+            segmentTexts: diagnostics.segmentTexts,
+            averageLogProbability: diagnostics.averageLogProbability,
+            averageCompressionRatio: diagnostics.averageCompressionRatio
+        ) {
+            throw WhisperKitTranscriberError.lowQualityTranscription(rejectionReason)
+        }
         DebugLog.shared.log(
             String(
                 format: "WhisperKit CoreML 实验完成：模型=%@，结果=%d，字幕=%d，用时 %.2f 秒",
@@ -148,10 +156,17 @@ actor WhisperKitTranscriber {
             }
     }
 
-    private static func logTranscriptionDiagnostics(
-        _ results: [TranscriptionResult],
-        modelVariant: WhisperKitModelVariant
-    ) {
+    private struct TranscriptionDiagnostics {
+        var resultCount: Int
+        var segmentCount: Int
+        var languages: String
+        var averageLogProbability: Float?
+        var averageCompressionRatio: Float?
+        var preview: String
+        var segmentTexts: [String]
+    }
+
+    private static func transcriptionDiagnostics(_ results: [TranscriptionResult]) -> TranscriptionDiagnostics {
         let segments = results.flatMap(\.segments)
         let preview = segments
             .prefix(3)
@@ -164,16 +179,31 @@ actor WhisperKitTranscriber {
         let languages = Set(results.map(\.language)).sorted().joined(separator: ",")
         let avgLogProb = segments.isEmpty ? nil : segments.map(\.avgLogprob).reduce(0, +) / Float(segments.count)
         let avgCompressionRatio = segments.isEmpty ? nil : segments.map(\.compressionRatio).reduce(0, +) / Float(segments.count)
+        return TranscriptionDiagnostics(
+            resultCount: results.count,
+            segmentCount: segments.count,
+            languages: languages.isEmpty ? "无" : languages,
+            averageLogProbability: avgLogProb,
+            averageCompressionRatio: avgCompressionRatio,
+            preview: preview.isEmpty ? "无" : preview,
+            segmentTexts: segments.map(\.text)
+        )
+    }
+
+    private static func logTranscriptionDiagnostics(
+        _ diagnostics: TranscriptionDiagnostics,
+        modelVariant: WhisperKitModelVariant
+    ) {
         DebugLog.shared.log(
             String(
                 format: "WhisperKit 诊断：模型=%@，results=%d，segments=%d，language=%@，avgLogProb=%@，avgCompression=%@，预览=%@",
                 modelVariant.title,
-                results.count,
-                segments.count,
-                languages.isEmpty ? "无" : languages,
-                avgLogProb.map { String(format: "%.2f", $0) } ?? "无",
-                avgCompressionRatio.map { String(format: "%.2f", $0) } ?? "无",
-                preview.isEmpty ? "无" : preview
+                diagnostics.resultCount,
+                diagnostics.segmentCount,
+                diagnostics.languages,
+                diagnostics.averageLogProbability.map { String(format: "%.2f", $0) } ?? "无",
+                diagnostics.averageCompressionRatio.map { String(format: "%.2f", $0) } ?? "无",
+                diagnostics.preview
             )
         )
     }
@@ -224,11 +254,14 @@ actor WhisperKitTranscriber {
 
 enum WhisperKitTranscriberError: Error, LocalizedError {
     case noSpeechDetected
+    case lowQualityTranscription(String)
 
     var errorDescription: String? {
         switch self {
         case .noSpeechDetected:
             return "WhisperKit 没有从这段音频中识别到中文语音。"
+        case .lowQualityTranscription(let reason):
+            return reason
         }
     }
 }
