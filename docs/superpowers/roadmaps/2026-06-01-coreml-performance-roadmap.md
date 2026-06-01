@@ -59,6 +59,7 @@ Possible provider options to evaluate only if the wrapper supports them:
 Stop condition:
 
 - If CoreML either fails to initialize, produces empty subtitles, shows little/no useful CoreML graph partitioning, or does not improve repeat-run total time by at least 15 percent on the baseline file, keep it experimental and do not spend time converting models yet.
+- Observed on the 664.2 second baseline file: CoreML loaded in 13.35 seconds, decoded 19 windows in about 2.02 seconds total, and produced 0 subtitle segments. This should be treated as a failed CoreML EP experiment for the current int8 model unless future diagnostics prove a different graph export behaves correctly.
 
 ## M27: Window Shape and Scheduling Tuning
 

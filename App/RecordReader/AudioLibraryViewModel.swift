@@ -23,6 +23,7 @@ final class AudioLibraryViewModel: ObservableObject {
     private var selectedSources: [URL] = []
     private var activeSecurityScopedURLs: [URL] = []
     private var activeSubtitleRecognitionID: Recording.ID?
+    private var unavailableCoreMLReason: String?
 
     init(
         scanner: RecordingLibraryScanner = RecordingLibraryScanner(),
@@ -283,6 +284,16 @@ final class AudioLibraryViewModel: ObservableObject {
         threadCount: SherpaThreadCount,
         windowDuration: TranscriptionWindowDuration
     ) async throws -> (segments: [SubtitleSegment], provider: RecognitionProvider) {
+        if recognitionProvider == .coreML, let unavailableCoreMLReason {
+            DebugLog.shared.log("CoreML 本次会话已标记不可用：\(unavailableCoreMLReason)，直接使用 CPU")
+            return try await transcribeWithSherpaCPU(
+                url: url,
+                id: id,
+                threadCount: threadCount,
+                windowDuration: windowDuration
+            )
+        }
+
         do {
             let segments = try await sherpaTranscriber.transcribe(
                 url: url,
@@ -295,6 +306,7 @@ final class AudioLibraryViewModel: ObservableObject {
                 }
             }
             if recognitionProvider.shouldRetryCPUWhenRecognitionIsEmpty, segments.isEmpty {
+                rememberCPUFallbackIfNeeded(for: recognitionProvider, reason: "CoreML 未产出字幕")
                 DebugLog.shared.log("CoreML 后端未产出字幕，正在回退 CPU 重新识别")
                 return try await transcribeWithSherpaCPU(
                     url: url,
@@ -308,7 +320,9 @@ final class AudioLibraryViewModel: ObservableObject {
             guard recognitionProvider.shouldRetryCPUOnProviderFailure else {
                 throw error
             }
-            DebugLog.shared.log("CoreML 后端失败：\(error.localizedDescription)，正在回退 CPU")
+            let reason = coreMLFallbackReason(for: error)
+            rememberCPUFallbackIfNeeded(for: recognitionProvider, reason: reason)
+            DebugLog.shared.log("\(reason)，正在回退 CPU")
             return try await transcribeWithSherpaCPU(
                 url: url,
                 id: id,
@@ -335,6 +349,20 @@ final class AudioLibraryViewModel: ObservableObject {
             }
         }
         return (segments, .cpu)
+    }
+
+    private func coreMLFallbackReason(for error: Error) -> String {
+        if case SherpaOnnxTranscriberError.noSpeechDetected = error {
+            return "CoreML 后端未产出字幕"
+        }
+        return "CoreML 后端失败：\(error.localizedDescription)"
+    }
+
+    private func rememberCPUFallbackIfNeeded(for provider: RecognitionProvider, reason: String) {
+        guard provider.shouldRememberCPUFallbackAfterFailure else {
+            return
+        }
+        unavailableCoreMLReason = reason
     }
 
     private func recognizeWithAppleSpeech(url: URL, id: Recording.ID, primaryError: Error? = nil) {

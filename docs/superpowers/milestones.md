@@ -1007,3 +1007,47 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:4968ec832944615151f8195565d7a45832d4089ce5750a07551babf419114d5c`.
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+
+### 2026-06-01 M25.3: CoreML Empty-Window Device Result Handling
+
+Status: implemented locally, awaiting cloud verification.
+
+Device evidence:
+
+- File: `IMG_6767少女4.mp3`.
+- Settings: CoreML experimental provider, thread count `4`, window length `35` seconds.
+- CoreML engine load time: `13.35` seconds.
+- Windows: `19`.
+- Window recognition times: about `0.04` seconds each after the first `0.11` second window.
+- Subtitle result: `0` subtitle segments across all `19` windows.
+- Total CoreML path time before CPU fallback: `15.40` seconds.
+
+Diagnosis:
+
+- This is not evidence that the audio has no human speech because the same file previously produced subtitles on CPU.
+- The very short per-window CoreML times plus all-empty output indicate the current int8 Paraformer ONNX graph is not producing usable CoreML results.
+- The previous fallback was functionally correct but the log message still said CoreML failed with the user-facing "no speech" error, which is misleading.
+- Repeating CoreML in the same App session would keep wasting about 15 seconds before CPU fallback.
+
+Fix:
+
+- Added `RecognitionProvider.shouldRememberCPUFallbackAfterFailure`.
+- After CoreML returns empty subtitles or throws `noSpeechDetected`, the app now records CoreML as unavailable for the current App session.
+- Later recognition attempts in the same App session skip CoreML and go directly to CPU even if the Debug setting still says CoreML.
+- CoreML no-speech failures now log as `CoreML 后端未产出字幕` instead of implying the audio file has no speech.
+- Updated the CoreML roadmap with the real-device empty-window result and stop condition.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- A focused `swiftc -typecheck` snippet confirmed `RecognitionProvider.coreML.shouldRememberCPUFallbackAfterFailure` is available.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.RecognitionProviderTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Pending.

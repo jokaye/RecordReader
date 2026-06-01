@@ -32,4 +32,9 @@ final class RecognitionProviderTests: XCTestCase {
         XCTAssertEqual(RecognitionProvider.cpu.runtimeDebugValue, 0)
         XCTAssertEqual(RecognitionProvider.coreML.runtimeDebugValue, 1)
     }
+
+    func testOnlyExperimentalCoreMLProviderCanBeMarkedUnavailableAfterFallback() {
+        XCTAssertFalse(RecognitionProvider.cpu.shouldRememberCPUFallbackAfterFailure)
+        XCTAssertTrue(RecognitionProvider.coreML.shouldRememberCPUFallbackAfterFailure)
+    }
 }

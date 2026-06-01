@@ -48,4 +48,8 @@ public enum RecognitionProvider: String, CaseIterable, Equatable, Identifiable {
             return 1
         }
     }
+
+    public var shouldRememberCPUFallbackAfterFailure: Bool {
+        self == .coreML
+    }
 }
