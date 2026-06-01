@@ -882,7 +882,7 @@ Manual follow-up:
 
 ### 2026-06-01 M25: CoreML Provider Experimental Switch
 
-Status: implemented locally, awaiting cloud verification.
+Status: implemented and cloud-verified.
 
 User direction:
 
@@ -912,7 +912,11 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `4b976c7` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `4b976c7`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 15:04:00 +0800`.
+- Local downloaded IPA digest: `sha256:ce05190f535d7e7c256eb78710f85402054d0ead7bcc7cea634532cab315e060`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
 
 Manual follow-up:
 
