@@ -736,3 +736,51 @@ Cloud verification:
 Manual follow-up:
 
 - On the same 20-minute file, rerun subtitle recognition and open the in-app debug log. Expected log shape: decoded duration near the real file length, fixed window count around duration / 25 seconds, and a nonzero subtitle count. If decoded duration is much shorter than the file, the remaining issue is AVFoundation decode/input access; if duration and window count are correct but subtitles are still sparse, the remaining issue is model accuracy or empty text returned for specific windows.
+
+### 2026-06-01 M22: Streaming Long-Audio Subtitle Performance Optimization
+
+Status: implemented and cloud-verified.
+
+User direction:
+
+- Do the subtitle recognition performance optimization work before adding the recognition progress bar.
+
+Problem:
+
+- The M21 long-audio coverage fix decoded the entire selected file into one `[Float]` before recognition.
+- For long recordings, this made peak memory scale with total audio duration. At 16 kHz mono Float32, 20 minutes is about 73 MB of PCM before per-window copies and model runtime memory.
+
+Fix:
+
+- Added `TranscriptionWindowBuffer` in `RecordReaderCore`.
+- The buffer accepts streaming PCM chunks, emits complete fixed windows, and keeps only the unfinished tail in memory.
+- Updated `SherpaOnnxTranscriber` so audio at or above 120 seconds uses streaming fixed-window recognition.
+- Short audio still uses the existing VAD path to preserve faster, tighter segmentation.
+- Added debug logs for decode duration, decoded sample count, expected duration, completed window count, subtitle count, and total local recognition time.
+
+Expected impact:
+
+- Long-audio peak PCM memory no longer scales with the full file duration. It now scales mainly with the current 25-second recognition window plus the current AVFoundation decode chunk.
+- The change does not promise faster model inference by itself. Its main win is lower memory pressure and better diagnostics; speed improvement depends on less allocation and fewer full-file copies on device.
+
+Local verification:
+
+- `xcodegen generate` passed.
+- `swiftc -typecheck Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because full Xcode/iOS SDK is unavailable through `xcrun`.
+
+Cloud verification:
+
+- Commit `0db366e` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `0db366e`.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26733644371`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 11:35:51 +0800`.
+- Local downloaded IPA digest: `sha256:3dc561d40562257a147991a56749be61d4ee5ee3176e2e5f6063c409d1d3771c`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` is iPhone-only, contains `NSSpeechRecognitionUsageDescription`, and does not contain `NSMicrophoneUsageDescription`.
+
+Manual follow-up:
+
+- On a real iPhone, rerun the same 20-minute file and compare the debug log against M21. The important signal is lower memory pressure and stable completion. If speed is still insufficient, the next performance step is real-device timing comparison across `numThreads` values and a fast-mode small model A/B test.
