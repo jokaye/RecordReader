@@ -1332,3 +1332,57 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:2c7894e8e9c6e7d87cbea878d73ebf94a583909ff905f94b646d2183a6dab984`.
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
+
+### 2026-06-01 M29E: Bundled WhisperKit Small Experiment Build
+
+Status: cloud verified on experiment branch.
+
+User direction:
+
+- In the experiment branch, bundle the WhisperKit Small 216MB model into the IPA.
+- Remove sherpa model resources from the experiment IPA so they do not affect experiment package size.
+- Preload the bundled WhisperKit Small model.
+- Keep Tiny/Base as user-downloadable runtime options.
+
+Design:
+
+- Keep sherpa iOS libraries in the build so existing source files and debug controls still compile.
+- Exclude sherpa Paraformer/VAD model resources by default in the experiment branch.
+- Add a dedicated WhisperKit Small preparation script that downloads the CoreML model files and the `openai/whisper-small` tokenizer files into app resources before XcodeGen runs.
+- Load Small from the app bundle with `download: false`; Tiny/Base continue using the existing Application Support download cache.
+- Do not attempt sherpa fallback after WhisperKit failure in this experiment build because sherpa models are intentionally not bundled.
+
+Fix:
+
+- Changed `ExperimentalTranscriptionEngine.defaultValue` to `whisperKitCoreML`.
+- Added `WhisperKitModelVariant.isBundledInExperiment` and `bundledModelDirectoryName`; only Small 216MB is bundled.
+- Added `scripts/prepare-whisperkit-small-ios.sh` to download `openai_whisper-small_216MB` CoreML files plus tokenizer files.
+- Changed `scripts/prepare-sherpa-onnx-ios.sh` so sherpa model resources are excluded unless `INCLUDE_SHERPA_MODELS=1`.
+- Updated the iOS workflow to prepare the bundled WhisperKit Small resources before `xcodegen generate`.
+- `WhisperKitTranscriber` now loads Small from the bundle with `modelFolder`/`tokenizerFolder` and no download.
+- `ContentView` preloads the bundled Small model on launch through `AudioLibraryViewModel`.
+- Updated Debug UI copy: Small is bundled; Tiny/Base download at first use; sherpa Chinese models are not bundled in this experiment package.
+
+Local verification:
+
+- Confirmed the new bundled model metadata API was absent before implementation with a focused `swiftc -typecheck` snippet.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources passed with the sherpa-onnx bridging header using the main worktree's local header cache.
+- `bash -n scripts/prepare-sherpa-onnx-ios.sh` and `bash -n scripts/prepare-whisperkit-small-ios.sh` passed.
+- `scripts/prepare-sherpa-onnx-ios.sh` left only `SherpaOnnxModels/README.md`; no sherpa model files remained locally.
+- `scripts/prepare-whisperkit-small-ios.sh` produced `App/RecordReader/Resources/WhisperKitModels/openai_whisper-small_216MB` at `226M`, including `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`, `TextDecoder.mlmodelc`, and tokenizer files.
+- A focused Swift runner confirmed the experiment default is WhisperKit CoreML and only Small is marked bundled.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter ExperimentalTranscriptionEngineTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Commit `2e09996` passed the full `iOS` workflow on `codex/whisperkit-coreml-experiment`.
+- The workflow published its IPA under branch-specific tag `codex-whisperkit-coreml-experiment-unsigned-ipa`.
+- Latest experiment IPA was downloaded locally to `.build/github-artifacts/RecordReader-whisperkit-experiment-unsigned.ipa` at `2026-06-01 17:42:00 +0800`.
+- Local downloaded IPA digest: `sha256:5b4195e0fe905f4ec007a3e2abfe755feea39e6b2d5844266d4ea3817c9d80ed`.
+- Local downloaded IPA size: `174M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`, `TextDecoder.mlmodelc`, `tokenizer.json`, `vocab.json`, and `merges.txt` in `Payload/RecordReader.app`.
+- Unzipped IPA does not contain sherpa `model.int8.onnx`, `silero_vad.onnx`, or `tokens.txt`.
