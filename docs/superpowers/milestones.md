@@ -966,7 +966,7 @@ Cloud verification:
 
 ### 2026-06-01 M25.2: CoreML Provider Review Hardening
 
-Status: implemented locally, awaiting cloud verification.
+Status: implemented and cloud-verified.
 
 Input:
 
@@ -1002,4 +1002,8 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `c6b06ea` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `c6b06ea`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 15:29:00 +0800`.
+- Local downloaded IPA digest: `sha256:4968ec832944615151f8195565d7a45832d4089ce5750a07551babf419114d5c`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
