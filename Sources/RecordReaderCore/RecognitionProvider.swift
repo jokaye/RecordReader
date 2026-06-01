@@ -5,6 +5,7 @@ public enum RecognitionProvider: String, CaseIterable, Equatable, Identifiable {
     case coreML = "coreml"
 
     public static let defaultValue = RecognitionProvider.cpu
+    public static let selectableCases = [RecognitionProvider.cpu]
 
     public init(rawValueOrDefault rawValue: String) {
         self = RecognitionProvider(rawValue: rawValue) ?? Self.defaultValue
@@ -51,5 +52,14 @@ public enum RecognitionProvider: String, CaseIterable, Equatable, Identifiable {
 
     public var shouldRememberCPUFallbackAfterFailure: Bool {
         self == .coreML
+    }
+
+    public var isSupportedByBundledModel: Bool {
+        switch self {
+        case .cpu:
+            return true
+        case .coreML:
+            return false
+        }
     }
 }

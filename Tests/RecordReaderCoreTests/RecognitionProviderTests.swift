@@ -8,6 +8,12 @@ final class RecognitionProviderTests: XCTestCase {
         XCTAssertEqual(RecognitionProvider.defaultValue, .cpu)
     }
 
+    func testOnlyCPUIsSelectableForBundledInt8ParaformerModel() {
+        XCTAssertEqual(RecognitionProvider.selectableCases, [.cpu])
+        XCTAssertTrue(RecognitionProvider.cpu.isSupportedByBundledModel)
+        XCTAssertFalse(RecognitionProvider.coreML.isSupportedByBundledModel)
+    }
+
     func testInvalidRawValueFallsBackToDefault() {
         XCTAssertEqual(RecognitionProvider(rawValueOrDefault: "metal"), .cpu)
         XCTAssertEqual(RecognitionProvider(rawValueOrDefault: ""), .cpu)

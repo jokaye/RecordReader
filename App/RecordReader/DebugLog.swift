@@ -142,14 +142,14 @@ private struct DebugRecognitionSettingsView: View {
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Picker("本地识别后端", selection: $recognitionProviderRawValue) {
-                    ForEach(RecognitionProvider.allCases) { provider in
+                    ForEach(RecognitionProvider.selectableCases) { provider in
                         Text(provider.logLabel).tag(provider.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
             }
 
-            Text("CoreML 是实验选项；失败时会先回退 CPU，再回退 iOS Speech。")
+            Text("CoreML 对当前内置 int8 中文模型不可用，已保留为后续兼容模型实验。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

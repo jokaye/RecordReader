@@ -1010,7 +1010,7 @@ Cloud verification:
 
 ### 2026-06-01 M25.3: CoreML Empty-Window Device Result Handling
 
-Status: implemented locally, awaiting cloud verification.
+Status: superseded by M25.4 before cloud verification.
 
 Device evidence:
 
@@ -1041,6 +1041,49 @@ Local verification:
 
 - `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
 - A focused `swiftc -typecheck` snippet confirmed `RecognitionProvider.coreML.shouldRememberCPUFallbackAfterFailure` is available.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.RecognitionProviderTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Skipped. This change was pushed as `451e2e7`, but before downloading its IPA, M25.4 narrowed the fix further by disabling CoreML for the current bundled model.
+
+### 2026-06-01 M25.4: Disable CoreML for Current Int8 Paraformer
+
+Status: implemented locally, awaiting cloud verification.
+
+User direction:
+
+- Try to find and fix the reason CoreML cannot recognize subtitles.
+
+Evidence:
+
+- Same audio file recognizes on CPU but CoreML produced 0 subtitles across all 19 windows.
+- CoreML engine load took 13.35 seconds, then each 35-second window decoded in about 0.04 seconds and produced no text.
+- Local ONNX graph inspection of the bundled `model.int8.onnx` found 4980 nodes, including 285 `MatMulInteger`, 270 `DynamicQuantizeLinear`, dynamic `feats_length` input, and 3 `Loop` nodes.
+- The known alternate sherpa-onnx Paraformer/SenseVoice archives checked from upstream are roughly 950MB to 1GB, which is not suitable as a direct replacement for the current lightweight phone bundle.
+
+Conclusion:
+
+- The root cause is model/backend incompatibility: the current int8 Paraformer ONNX graph is not a usable CoreML EP target.
+- This cannot be fixed reliably by changing Swift fallback logic or thread/window settings.
+
+Fix:
+
+- Added `RecognitionProvider.isSupportedByBundledModel`.
+- Added `RecognitionProvider.selectableCases`, currently CPU-only for the bundled int8 Paraformer model.
+- `DebugSettings.recognitionProvider` now automatically falls back to CPU if an older saved setting contains CoreML.
+- Debug UI no longer exposes CoreML as a selectable backend for this model and explains that CoreML is reserved for a future compatible model.
+- The CoreML code path remains in place for future model experiments, but users cannot select the known-broken backend with the current bundled model.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- A focused `swiftc -typecheck` snippet confirmed `RecognitionProvider.selectableCases`, `RecognitionProvider.coreML.isSupportedByBundledModel`, and `RecognitionProvider.coreML.shouldRememberCPUFallbackAfterFailure` are available.
 - `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
 - `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
 - `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.

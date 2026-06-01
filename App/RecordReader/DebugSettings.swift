@@ -11,10 +11,15 @@ enum DebugSettings {
             guard let value = UserDefaults.standard.string(forKey: recognitionProviderKey) else {
                 return .defaultValue
             }
-            return RecognitionProvider(rawValueOrDefault: value)
+            let provider = RecognitionProvider(rawValueOrDefault: value)
+            guard provider.isSupportedByBundledModel else {
+                return .defaultValue
+            }
+            return provider
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: recognitionProviderKey)
+            let provider = newValue.isSupportedByBundledModel ? newValue : .defaultValue
+            UserDefaults.standard.set(provider.rawValue, forKey: recognitionProviderKey)
         }
     }
 
