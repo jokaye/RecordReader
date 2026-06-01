@@ -7,6 +7,10 @@ actor WhisperKitTranscriber {
     private var engine: WhisperKit?
     private var loadedModelVariant: WhisperKitModelVariant?
 
+    func preload(modelVariant: WhisperKitModelVariant) async throws {
+        _ = try await loadEngine(modelVariant: modelVariant)
+    }
+
     func transcribe(
         url: URL,
         modelVariant: WhisperKitModelVariant,
@@ -70,24 +74,38 @@ actor WhisperKitTranscriber {
         }
 
         let modelCacheURL = try Self.modelCacheURL()
-        try FileManager.default.createDirectory(
-            at: modelCacheURL,
-            withIntermediateDirectories: true
-        )
+        try FileManager.default.createDirectory(at: modelCacheURL, withIntermediateDirectories: true)
         let computeOptions = ModelComputeOptions(
             audioEncoderCompute: .cpuAndNeuralEngine,
             textDecoderCompute: .cpuAndNeuralEngine
         )
-        let config = WhisperKitConfig(
-            model: modelVariant.modelName,
-            downloadBase: modelCacheURL,
-            computeOptions: computeOptions,
-            verbose: false,
-            prewarm: true,
-            load: true,
-            download: true,
-            useBackgroundDownloadSession: false
-        )
+        let bundledModelFolder = Self.bundledModelFolder(for: modelVariant)
+        let config: WhisperKitConfig
+        if let bundledModelFolder {
+            config = WhisperKitConfig(
+                model: modelVariant.modelName,
+                downloadBase: modelCacheURL,
+                modelFolder: bundledModelFolder.path,
+                tokenizerFolder: bundledModelFolder,
+                computeOptions: computeOptions,
+                verbose: false,
+                prewarm: true,
+                load: true,
+                download: false,
+                useBackgroundDownloadSession: false
+            )
+        } else {
+            config = WhisperKitConfig(
+                model: modelVariant.modelName,
+                downloadBase: modelCacheURL,
+                computeOptions: computeOptions,
+                verbose: false,
+                prewarm: true,
+                load: true,
+                download: true,
+                useBackgroundDownloadSession: false
+            )
+        }
         DebugLog.shared.log("开始加载 WhisperKit CoreML 实验模型：\(modelVariant.title)（\(modelVariant.estimatedDownloadSize)）")
         let startedAt = Date()
         let nextEngine = try await WhisperKit(config)
@@ -133,6 +151,30 @@ actor WhisperKitTranscriber {
         return applicationSupport
             .appendingPathComponent("RecordReader", isDirectory: true)
             .appendingPathComponent("WhisperKitModels", isDirectory: true)
+    }
+
+    private static func bundledModelFolder(for modelVariant: WhisperKitModelVariant) -> URL? {
+        guard let directoryName = modelVariant.bundledModelDirectoryName else {
+            return nil
+        }
+        if let modelFolder = Bundle.main.url(
+            forResource: directoryName,
+            withExtension: nil,
+            subdirectory: "WhisperKitModels"
+        ) {
+            return modelFolder
+        }
+
+        let requiredRootResources = [
+            Bundle.main.url(forResource: "AudioEncoder", withExtension: "mlmodelc"),
+            Bundle.main.url(forResource: "MelSpectrogram", withExtension: "mlmodelc"),
+            Bundle.main.url(forResource: "TextDecoder", withExtension: "mlmodelc"),
+            Bundle.main.url(forResource: "tokenizer", withExtension: "json")
+        ]
+        guard requiredRootResources.allSatisfy({ $0 != nil }) else {
+            return nil
+        }
+        return Bundle.main.resourceURL
     }
 
     private static func temporaryAudioInputDirectory() -> URL {

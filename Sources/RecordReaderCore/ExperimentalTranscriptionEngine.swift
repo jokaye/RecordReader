@@ -4,7 +4,7 @@ public enum ExperimentalTranscriptionEngine: String, CaseIterable, Equatable, Id
     case sherpaOnnx
     case whisperKitCoreML
 
-    public static let defaultValue = ExperimentalTranscriptionEngine.sherpaOnnx
+    public static let defaultValue = ExperimentalTranscriptionEngine.whisperKitCoreML
 
     public init(rawValueOrDefault rawValue: String) {
         self = ExperimentalTranscriptionEngine(rawValue: rawValue) ?? Self.defaultValue
@@ -69,6 +69,19 @@ public enum WhisperKitModelVariant: String, CaseIterable, Equatable, Identifiabl
             return "约 147MB"
         case .smallCompressed:
             return "约 217MB"
+        }
+    }
+
+    public var isBundledInExperiment: Bool {
+        self == .smallCompressed
+    }
+
+    public var bundledModelDirectoryName: String? {
+        switch self {
+        case .smallCompressed:
+            return "openai_whisper-small_216MB"
+        case .tiny, .base:
+            return nil
         }
     }
 }

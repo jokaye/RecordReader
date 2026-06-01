@@ -70,6 +70,20 @@ final class AudioLibraryViewModel: ObservableObject {
         }
     }
 
+    func preloadBundledWhisperKitModel() {
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+            do {
+                try await self.whisperKitTranscriber.preload(modelVariant: .smallCompressed)
+                DebugLog.shared.log("WhisperKit Small 216MB 内置模型已预加载")
+            } catch {
+                DebugLog.shared.log("WhisperKit Small 216MB 内置模型预加载失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
     func restoreLastFolder() {
         guard selectedFolder == nil, let bookmark = metadata.selectedFolderBookmark else {
             return
@@ -295,15 +309,10 @@ final class AudioLibraryViewModel: ObservableObject {
                     )
                     result = (sherpaResult.segments, "本地中文模型，\(sherpaResult.provider.logLabel)")
                 case .whisperKitCoreML:
-                    result = try await self.transcribeWithWhisperKitFallbackToSherpa(
+                    result = try await self.transcribeWithWhisperKit(
                         url: url,
                         id: id,
-                        modelVariant: whisperKitModelVariant,
-                        recognitionProvider: recognitionProvider,
-                        threadCount: threadCount,
-                        windowDuration: windowDuration,
-                        workerCount: workerCount,
-                        performanceTier: performanceTier
+                        modelVariant: whisperKitModelVariant
                     )
                 }
                 let segments = result.segments
@@ -331,15 +340,10 @@ final class AudioLibraryViewModel: ObservableObject {
         }
     }
 
-    private func transcribeWithWhisperKitFallbackToSherpa(
+    private func transcribeWithWhisperKit(
         url: URL,
         id: Recording.ID,
-        modelVariant: WhisperKitModelVariant,
-        recognitionProvider: RecognitionProvider,
-        threadCount: SherpaThreadCount,
-        windowDuration: TranscriptionWindowDuration,
-        workerCount: TranscriptionWorkerCount,
-        performanceTier: TranscriptionPerformanceTier
+        modelVariant: WhisperKitModelVariant
     ) async throws -> (segments: [SubtitleSegment], label: String) {
         do {
             let segments = try await whisperKitTranscriber.transcribe(
@@ -352,21 +356,8 @@ final class AudioLibraryViewModel: ObservableObject {
             }
             return (segments, "WhisperKit CoreML 实验，\(modelVariant.title)")
         } catch {
-            DebugLog.shared.log("WhisperKit CoreML 实验失败：\(error.localizedDescription)，回退到 sherpa-onnx")
-            do {
-                let sherpaResult = try await transcribeWithSherpaFallback(
-                    url: url,
-                    id: id,
-                    recognitionProvider: recognitionProvider,
-                    threadCount: threadCount,
-                    windowDuration: windowDuration,
-                    workerCount: workerCount,
-                    performanceTier: performanceTier
-                )
-                return (sherpaResult.segments, "本地中文模型，\(sherpaResult.provider.logLabel)")
-            } catch {
-                throw error
-            }
+            DebugLog.shared.log("WhisperKit CoreML 实验失败：\(error.localizedDescription)，实验包不再内置 sherpa 模型，将交给 iOS Speech 兜底")
+            throw error
         }
     }
 

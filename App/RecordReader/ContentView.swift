@@ -74,6 +74,7 @@ struct ContentView: View {
             Button("取消", role: .cancel) {}
         }
         .task {
+            library.preloadBundledWhisperKitModel()
             library.restoreLastFolder()
             player.onFinish = {
                 if let next = library.selectNext() {

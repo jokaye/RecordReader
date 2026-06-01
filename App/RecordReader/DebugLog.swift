@@ -179,7 +179,7 @@ private struct DebugRecognitionSettingsView: View {
                 .pickerStyle(.menu)
             }
 
-            Text("WhisperKit 是实验路径；失败会回退到当前 sherpa-onnx。")
+            Text("实验包默认使用内置 WhisperKit Small；sherpa 中文模型不随实验包内置。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -199,7 +199,7 @@ private struct DebugRecognitionSettingsView: View {
                 .pickerStyle(.menu)
             }
 
-            Text("首次使用会下载 CoreML 模型；不增加 IPA 内置模型体积。")
+            Text("Small 已内置并预加载；Tiny/Base 首次使用时下载。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

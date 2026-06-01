@@ -2,8 +2,8 @@ import XCTest
 @testable import RecordReaderCore
 
 final class ExperimentalTranscriptionEngineTests: XCTestCase {
-    func testWhisperKitCoreMLExperimentIsAvailableButNotDefault() {
-        XCTAssertEqual(ExperimentalTranscriptionEngine.defaultValue, .sherpaOnnx)
+    func testWhisperKitCoreMLExperimentIsBundledExperimentDefault() {
+        XCTAssertEqual(ExperimentalTranscriptionEngine.defaultValue, .whisperKitCoreML)
         XCTAssertEqual(
             ExperimentalTranscriptionEngine.allCases.map(\.rawValue),
             ["sherpaOnnx", "whisperKitCoreML"]
@@ -14,9 +14,9 @@ final class ExperimentalTranscriptionEngineTests: XCTestCase {
         )
     }
 
-    func testInvalidEngineRawValueFallsBackToSherpaOnnx() {
-        XCTAssertEqual(ExperimentalTranscriptionEngine(rawValueOrDefault: ""), .sherpaOnnx)
-        XCTAssertEqual(ExperimentalTranscriptionEngine(rawValueOrDefault: "unknown"), .sherpaOnnx)
+    func testInvalidEngineRawValueFallsBackToWhisperKitCoreML() {
+        XCTAssertEqual(ExperimentalTranscriptionEngine(rawValueOrDefault: ""), .whisperKitCoreML)
+        XCTAssertEqual(ExperimentalTranscriptionEngine(rawValueOrDefault: "unknown"), .whisperKitCoreML)
     }
 
     func testWhisperKitModelVariantsKeepSmallCompressedAsDefault() {
@@ -38,5 +38,12 @@ final class ExperimentalTranscriptionEngineTests: XCTestCase {
     func testInvalidWhisperKitModelVariantFallsBackToDefault() {
         XCTAssertEqual(WhisperKitModelVariant(rawValueOrDefault: ""), .smallCompressed)
         XCTAssertEqual(WhisperKitModelVariant(rawValueOrDefault: "large-v3"), .smallCompressed)
+    }
+
+    func testOnlySmallCompressedIsBundledInTheExperimentBuild() {
+        XCTAssertEqual(WhisperKitModelVariant.smallCompressed.bundledModelDirectoryName, "openai_whisper-small_216MB")
+        XCTAssertTrue(WhisperKitModelVariant.smallCompressed.isBundledInExperiment)
+        XCTAssertFalse(WhisperKitModelVariant.tiny.isBundledInExperiment)
+        XCTAssertFalse(WhisperKitModelVariant.base.isBundledInExperiment)
     }
 }

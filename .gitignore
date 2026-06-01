@@ -9,3 +9,4 @@ xcuserdata/
 App/RecordReader/Resources/SherpaOnnxModels/paraformer-zh/*.onnx
 App/RecordReader/Resources/SherpaOnnxModels/paraformer-zh/*.txt
 App/RecordReader/Resources/SherpaOnnxModels/vad/*.onnx
+App/RecordReader/Resources/WhisperKitModels/openai_whisper-small_216MB/
