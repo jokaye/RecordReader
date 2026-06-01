@@ -1200,6 +1200,47 @@ Cloud verification:
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
 - No Whisper model files are bundled yet. The app binary grew to `29,175,152` bytes, so the no-model WhisperKit dependency cost is only a small binary-code increase; model assets remain the major package-size risk.
 
+### 2026-06-01 M32: Debug-only WhisperKit File Recognition POC
+
+Status: implemented locally, awaiting cloud verification.
+
+User direction:
+
+- Start development of the Debug-only WhisperKit file recognition POC in the experiment worktree.
+- Keep the experiment isolated from the stable sherpa-onnx path.
+
+Design:
+
+- Add a Debug-only engine picker: `sherpa-onnx` remains default, `WhisperKit CoreML 实验` is opt-in.
+- Add a Debug-only WhisperKit model picker with runtime-download variants: Tiny, Base, and Small 216MB.
+- Do not bundle Whisper model assets in the IPA.
+- Force WhisperKit decoding to Chinese with `language: "zh"` and `.transcribe`.
+- Use CoreML compute options that allow CPU + Neural Engine on device.
+- If WhisperKit fails or returns no segments, fall back to the existing sherpa-onnx path; if sherpa also fails, keep the existing Apple Speech fallback.
+
+Fix:
+
+- Added `ExperimentalTranscriptionEngine.rawValueOrDefault`.
+- Added `WhisperKitModelVariant` with estimated download sizes and stable model search names.
+- Added Debug settings and UI controls for engine and WhisperKit model selection.
+- Added `WhisperKitTranscriber`, an app-target actor that lazily loads and caches a selected WhisperKit model, downloads it into Application Support, transcribes the selected file, and maps WhisperKit segments to `SubtitleSegment`.
+- Updated `AudioLibraryViewModel.recognizeSubtitleForSelectedRecording()` to route to WhisperKit only when the Debug engine setting selects it.
+- WhisperKit failures now log and fall back to sherpa-onnx without changing the default production path.
+
+Local verification:
+
+- Focused red/green runners confirmed the new engine/model defaults and model names.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources passed with the sherpa-onnx bridging header using the existing local header cache.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.ExperimentalTranscriptionEngineTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Pending.
+
 ### 2026-06-01 M27: Playlist Record Deletion and Subtitle Display Modes
 
 Status: cloud verified.

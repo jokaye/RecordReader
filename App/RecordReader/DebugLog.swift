@@ -99,17 +99,29 @@ struct DebugLogView: View {
 }
 
 private struct DebugRecognitionSettingsView: View {
+    @AppStorage(DebugSettings.experimentalTranscriptionEngineKey) private var experimentalEngineRawValue = ExperimentalTranscriptionEngine.defaultValue.rawValue
     @AppStorage(DebugSettings.recognitionProviderKey) private var recognitionProviderRawValue = RecognitionProvider.defaultValue.rawValue
+    @AppStorage(DebugSettings.whisperKitModelVariantKey) private var whisperKitModelVariantRawValue = WhisperKitModelVariant.defaultValue.rawValue
     @AppStorage(DebugSettings.sherpaThreadCountKey) private var sherpaThreadCountRawValue = SherpaThreadCount.defaultValue.rawValue
     @AppStorage(DebugSettings.transcriptionWindowDurationKey) private var transcriptionWindowDurationRawValue = TranscriptionWindowDuration.defaultValue.rawValue
     @AppStorage(DebugSettings.transcriptionWorkerCountKey) private var transcriptionWorkerCountRawValue = TranscriptionWorkerCount.defaultValue.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            engineControl
+            whisperKitModelControl
             providerControl
             threadCountControl
             workerCountControl
             windowDurationControl
+        }
+        .onChange(of: experimentalEngineRawValue) { _, newValue in
+            let engine = ExperimentalTranscriptionEngine(rawValueOrDefault: newValue)
+            if engine.rawValue != newValue {
+                experimentalEngineRawValue = engine.rawValue
+            }
+            DebugSettings.experimentalTranscriptionEngine = engine
+            DebugLog.shared.log("字幕识别引擎设置为 \(engine.title)，下次识别生效")
         }
         .onChange(of: recognitionProviderRawValue) { _, newValue in
             let provider = RecognitionProvider(rawValueOrDefault: newValue)
@@ -118,6 +130,14 @@ private struct DebugRecognitionSettingsView: View {
             }
             DebugSettings.recognitionProvider = provider
             DebugLog.shared.log("本地识别后端设置为 \(provider.logLabel)，下次识别生效")
+        }
+        .onChange(of: whisperKitModelVariantRawValue) { _, newValue in
+            let model = WhisperKitModelVariant(rawValueOrDefault: newValue)
+            if model.rawValue != newValue {
+                whisperKitModelVariantRawValue = model.rawValue
+            }
+            DebugSettings.whisperKitModelVariant = model
+            DebugLog.shared.log("WhisperKit 实验模型设置为 \(model.title)（\(model.estimatedDownloadSize)），下次识别生效")
         }
         .onChange(of: sherpaThreadCountRawValue) { _, newValue in
             let threadCount = SherpaThreadCount(rawValueOrDefault: newValue)
@@ -142,6 +162,46 @@ private struct DebugRecognitionSettingsView: View {
             }
             DebugSettings.transcriptionWorkerCount = workerCount
             DebugLog.shared.log("长音频并行识别设置为 \(workerCount.label)，下次识别生效")
+        }
+    }
+
+    private var engineControl: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("字幕识别引擎", systemImage: "captions.bubble")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("字幕识别引擎", selection: $experimentalEngineRawValue) {
+                    ForEach(ExperimentalTranscriptionEngine.allCases) { engine in
+                        Text(engine.title).tag(engine.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Text("WhisperKit 是实验路径；失败会回退到当前 sherpa-onnx。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var whisperKitModelControl: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("WhisperKit 模型", systemImage: "square.and.arrow.down")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("WhisperKit 模型", selection: $whisperKitModelVariantRawValue) {
+                    ForEach(WhisperKitModelVariant.allCases) { model in
+                        Text("\(model.title) \(model.estimatedDownloadSize)").tag(model.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Text("首次使用会下载 CoreML 模型；不增加 IPA 内置模型体积。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

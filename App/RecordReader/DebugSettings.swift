@@ -3,6 +3,8 @@ import RecordReaderCore
 
 enum DebugSettings {
     static let recognitionProviderKey = "debug.recognitionProvider"
+    static let experimentalTranscriptionEngineKey = "debug.experimentalTranscriptionEngine"
+    static let whisperKitModelVariantKey = "debug.whisperKitModelVariant"
     static let sherpaThreadCountKey = "debug.sherpaThreadCount"
     static let transcriptionWindowDurationKey = "debug.transcriptionWindowDuration"
     static let transcriptionWorkerCountKey = "debug.transcriptionWorkerCount"
@@ -21,6 +23,30 @@ enum DebugSettings {
         set {
             let provider = newValue.isSupportedByBundledModel ? newValue : .defaultValue
             UserDefaults.standard.set(provider.rawValue, forKey: recognitionProviderKey)
+        }
+    }
+
+    static var experimentalTranscriptionEngine: ExperimentalTranscriptionEngine {
+        get {
+            guard let value = UserDefaults.standard.string(forKey: experimentalTranscriptionEngineKey) else {
+                return .defaultValue
+            }
+            return ExperimentalTranscriptionEngine(rawValueOrDefault: value)
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: experimentalTranscriptionEngineKey)
+        }
+    }
+
+    static var whisperKitModelVariant: WhisperKitModelVariant {
+        get {
+            guard let value = UserDefaults.standard.string(forKey: whisperKitModelVariantKey) else {
+                return .defaultValue
+            }
+            return WhisperKitModelVariant(rawValueOrDefault: value)
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: whisperKitModelVariantKey)
         }
     }
 

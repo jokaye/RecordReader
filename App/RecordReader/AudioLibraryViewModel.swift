@@ -19,6 +19,7 @@ final class AudioLibraryViewModel: ObservableObject {
     private let store: RecordingMetadataStore
     private let transcriber: SpeechTranscriber
     private let sherpaTranscriber: SherpaOnnxTranscriber
+    private let whisperKitTranscriber: WhisperKitTranscriber
     private var metadata: RecordingLibraryMetadata
     private var selectedSources: [URL] = []
     private var activeSecurityScopedURLs: [URL] = []
@@ -29,12 +30,14 @@ final class AudioLibraryViewModel: ObservableObject {
         scanner: RecordingLibraryScanner = RecordingLibraryScanner(),
         store: RecordingMetadataStore = RecordingMetadataStore(fileURL: AppPaths.metadataURL),
         transcriber: SpeechTranscriber = SpeechTranscriber(),
-        sherpaTranscriber: SherpaOnnxTranscriber = SherpaOnnxTranscriber()
+        sherpaTranscriber: SherpaOnnxTranscriber = SherpaOnnxTranscriber(),
+        whisperKitTranscriber: WhisperKitTranscriber = WhisperKitTranscriber()
     ) {
         self.scanner = scanner
         self.store = store
         self.transcriber = transcriber
         self.sherpaTranscriber = sherpaTranscriber
+        self.whisperKitTranscriber = whisperKitTranscriber
         do {
             self.metadata = try store.load()
         } catch {
@@ -257,6 +260,8 @@ final class AudioLibraryViewModel: ObservableObject {
         }
         let id = selectedRecording.id
         let url = selectedRecording.url
+        let engine = DebugSettings.experimentalTranscriptionEngine
+        let whisperKitModelVariant = DebugSettings.whisperKitModelVariant
         let recognitionProvider = DebugSettings.recognitionProvider
         let threadCount = DebugSettings.sherpaThreadCount
         let windowDuration = DebugSettings.transcriptionWindowDuration
@@ -268,25 +273,41 @@ final class AudioLibraryViewModel: ObservableObject {
             SubtitleDocument(status: .recognizing, segments: [], errorMessage: nil),
             for: id
         )
-        statusMessage = "正在用本地中文模型识别字幕…"
-        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，后端=\(recognitionProvider.logLabel)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒，并行=\(workerCount.label)，设备=\(DeviceProfile.identifier)")
+        statusMessage = engine == .whisperKitCoreML ? "正在用 WhisperKit CoreML 实验识别字幕…" : "正在用本地中文模型识别字幕…"
+        DebugLog.shared.log("开始字幕识别：\(url.lastPathComponent)，引擎=\(engine.title)，WhisperKit模型=\(whisperKitModelVariant.title)，sherpa后端=\(recognitionProvider.logLabel)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒，并行=\(workerCount.label)，设备=\(DeviceProfile.identifier)")
 
         Task { [weak self] in
             guard let self else {
                 return
             }
             do {
-                let result = try await self.transcribeWithSherpaFallback(
-                    url: url,
-                    id: id,
-                    recognitionProvider: recognitionProvider,
-                    threadCount: threadCount,
-                    windowDuration: windowDuration,
-                    workerCount: workerCount,
-                    performanceTier: performanceTier
-                )
+                let result: (segments: [SubtitleSegment], label: String)
+                switch engine {
+                case .sherpaOnnx:
+                    let sherpaResult = try await self.transcribeWithSherpaFallback(
+                        url: url,
+                        id: id,
+                        recognitionProvider: recognitionProvider,
+                        threadCount: threadCount,
+                        windowDuration: windowDuration,
+                        workerCount: workerCount,
+                        performanceTier: performanceTier
+                    )
+                    result = (sherpaResult.segments, "本地中文模型，\(sherpaResult.provider.logLabel)")
+                case .whisperKitCoreML:
+                    result = try await self.transcribeWithWhisperKitFallbackToSherpa(
+                        url: url,
+                        id: id,
+                        modelVariant: whisperKitModelVariant,
+                        recognitionProvider: recognitionProvider,
+                        threadCount: threadCount,
+                        windowDuration: windowDuration,
+                        workerCount: workerCount,
+                        performanceTier: performanceTier
+                    )
+                }
                 let segments = result.segments
-                DebugLog.shared.log("sherpa-onnx 完成：\(segments.count) 段字幕")
+                DebugLog.shared.log("\(result.label) 完成：\(segments.count) 段字幕")
                 if segments.isEmpty {
                     self.setSubtitle(
                         SubtitleDocument(status: .failed, segments: [], errorMessage: "没有从这段音频中识别到语音。"),
@@ -299,13 +320,52 @@ final class AudioLibraryViewModel: ObservableObject {
                         SubtitleDocument(status: .ready, segments: segments, errorMessage: nil),
                         for: id
                     )
-                    self.statusMessage = "字幕已生成（本地中文模型，\(result.provider.logLabel)）"
+                    self.statusMessage = "字幕已生成（\(result.label)）"
                     self.clearSubtitleRecognitionProgress(for: id)
                 }
             } catch {
-                DebugLog.shared.log("sherpa-onnx 失败：\(error.localizedDescription)，回退到 iOS Speech")
+                DebugLog.shared.log("\(engine.title) 失败：\(error.localizedDescription)，回退到 iOS Speech")
                 self.statusMessage = "本地中文识别失败，正在改用 iOS 语音识别…"
                 self.recognizeWithAppleSpeech(url: url, id: id, primaryError: error)
+            }
+        }
+    }
+
+    private func transcribeWithWhisperKitFallbackToSherpa(
+        url: URL,
+        id: Recording.ID,
+        modelVariant: WhisperKitModelVariant,
+        recognitionProvider: RecognitionProvider,
+        threadCount: SherpaThreadCount,
+        windowDuration: TranscriptionWindowDuration,
+        workerCount: TranscriptionWorkerCount,
+        performanceTier: TranscriptionPerformanceTier
+    ) async throws -> (segments: [SubtitleSegment], label: String) {
+        do {
+            let segments = try await whisperKitTranscriber.transcribe(
+                url: url,
+                modelVariant: modelVariant
+            ) { [weak self] progress in
+                Task { @MainActor in
+                    self?.setSubtitleRecognitionProgress(progress, for: id)
+                }
+            }
+            return (segments, "WhisperKit CoreML 实验，\(modelVariant.title)")
+        } catch {
+            DebugLog.shared.log("WhisperKit CoreML 实验失败：\(error.localizedDescription)，回退到 sherpa-onnx")
+            do {
+                let sherpaResult = try await transcribeWithSherpaFallback(
+                    url: url,
+                    id: id,
+                    recognitionProvider: recognitionProvider,
+                    threadCount: threadCount,
+                    windowDuration: windowDuration,
+                    workerCount: workerCount,
+                    performanceTier: performanceTier
+                )
+                return (sherpaResult.segments, "本地中文模型，\(sherpaResult.provider.logLabel)")
+            } catch {
+                throw error
             }
         }
     }
