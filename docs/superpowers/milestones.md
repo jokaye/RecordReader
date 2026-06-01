@@ -1426,3 +1426,44 @@ Cloud verification:
 - Local downloaded IPA size: `174M`.
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`, `TextDecoder.mlmodelc`, `tokenizer.json`, `vocab.json`, and `merges.txt` in `Payload/RecordReader.app`.
 - Unzipped IPA does not contain sherpa `model.int8.onnx`, `silero_vad.onnx`, or `tokens.txt`.
+
+### 2026-06-01 M31E: WhisperKit Official Threshold Quality Gate
+
+Status: cloud verified on experiment branch.
+
+User feedback:
+
+- The WhisperKit experiment output repeats `(小聲點)`.
+- Beyond the repeated phrase, the recognized text has very low correctness.
+- The decoding configuration should be checked against official Whisper defaults.
+
+Diagnosis:
+
+- OpenAI Whisper's official transcribe defaults treat gzip compression ratio higher than `2.4` as decoding failure and average log probability lower than `-1.0` as decoding failure.
+- The reported WhisperKit run had `avgCompression=9.42`, far above the official failure threshold, while `avgLogProb=-0.42` did not fail the log-probability threshold.
+- Therefore the repeated `(小聲點)` output should be treated as low-quality hallucination and rejected, not saved as usable subtitles.
+
+Fix:
+
+- Added `WhisperKitTranscriptionQualityGate.qualityFirstChinese` in `RecordReaderCore`.
+- The gate rejects WhisperKit results when average compression ratio exceeds `2.4`, average log probability drops below `-1.0`, or one normalized repeated phrase dominates the output.
+- `WhisperKitTranscriber` now builds diagnostics once, logs them, and throws a clear low-quality transcription error before returning subtitles.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources passed with the sherpa-onnx bridging header using the main worktree's local header cache.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter ExperimentalTranscriptionEngineTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Commit `5f66dfe` passed the full `iOS` workflow on `codex/whisperkit-coreml-experiment`.
+- The workflow published its IPA under branch-specific tag `codex-whisperkit-coreml-experiment-unsigned-ipa`.
+- Latest experiment IPA was downloaded locally to `.build/github-artifacts/RecordReader-whisperkit-experiment-unsigned.ipa` at `2026-06-01 18:17:00 +0800`.
+- Local downloaded IPA digest: `sha256:1fd4104127efd98fe8e0199403a618fae1def57adbaa89a71d110f9eb11e99d9`.
+- Local downloaded IPA size: `174M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`, `TextDecoder.mlmodelc`, `tokenizer.json`, `vocab.json`, and `merges.txt` in `Payload/RecordReader.app`.
+- Unzipped IPA does not contain sherpa `model.int8.onnx`, `silero_vad.onnx`, or `tokens.txt`.
