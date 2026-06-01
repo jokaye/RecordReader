@@ -35,6 +35,7 @@ Acceptance:
 - Existing CPU recognition behavior and defaults are unchanged.
 - Debug logs clearly show selected provider, thread count, window length, per-window timing, and final total timing.
 - CoreML failure does not leave the user without subtitles if CPU or Apple Speech can still complete.
+- CoreML experiment conclusions must not rely on whether the recognizer throws. A valid conclusion needs runtime diagnostics showing whether CoreML received useful graph partitions, plus repeated timing data.
 
 ## M26: Provider Options and Runtime Cache Investigation
 
@@ -47,6 +48,7 @@ Investigation tasks:
 - Test CoreML first run and second run separately because CoreML compilation/cache can dominate the first run.
 - Record engine load time separately from decode and per-window recognition time.
 - Compare CPU vs CoreML with the same file, thread count, and window length.
+- Treat `model.int8.onnx` plus dynamic-shape Paraformer as a likely poor CoreML EP fit until diagnostics prove otherwise.
 
 Possible provider options to evaluate only if the wrapper supports them:
 
@@ -56,7 +58,7 @@ Possible provider options to evaluate only if the wrapper supports them:
 
 Stop condition:
 
-- If CoreML either fails to initialize or does not improve repeat-run total time by at least 15 percent on the baseline file, keep it experimental and do not spend time converting models yet.
+- If CoreML either fails to initialize, produces empty subtitles, shows little/no useful CoreML graph partitioning, or does not improve repeat-run total time by at least 15 percent on the baseline file, keep it experimental and do not spend time converting models yet.
 
 ## M27: Window Shape and Scheduling Tuning
 
@@ -121,4 +123,3 @@ Likely outcomes:
 - If CoreML is unstable or not faster, keep CPU as default and leave CoreML in Debug as an experimental profiler switch.
 - If CoreML is faster but first-run compile cost is high, keep CPU default and document CoreML as a repeated-run experiment.
 - If CoreML is consistently faster and stable, promote it behind a non-debug setting only after repeated real-device validation.
-

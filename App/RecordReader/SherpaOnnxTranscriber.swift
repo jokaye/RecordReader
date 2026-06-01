@@ -155,18 +155,22 @@ actor SherpaOnnxTranscriber {
             sampleRate: Self.sampleRate,
             featureDim: Self.featureDim
         )
+        if recognitionProvider.runtimeDebugValue > 0 {
+            DebugLog.shared.log("CoreML 运行时诊断已开启；请在设备系统日志中查看 ONNX Runtime/CoreML 节点分配信息")
+        }
         let modelConfig = sherpaOnnxOfflineModelConfig(
             tokens: tokens.path,
             paraformer: sherpaOnnxOfflineParaformerModelConfig(model: model.path),
             numThreads: threadCount.rawValue,
             provider: recognitionProvider.rawValue,
+            debug: recognitionProvider.runtimeDebugValue,
             modelType: "paraformer"
         )
         var recognizerConfig = sherpaOnnxOfflineRecognizerConfig(
             featConfig: featConfig,
             modelConfig: modelConfig
         )
-        let recognizer = SherpaOnnxOfflineRecognizer(config: &recognizerConfig)
+        let recognizer = try SherpaOnnxOfflineRecognizer(config: &recognizerConfig)
 
         let sileroVadConfig = sherpaOnnxSileroVadModelConfig(model: vadModel.path)
         var vadModelConfig = sherpaOnnxVadModelConfig(sileroVad: sileroVadConfig)

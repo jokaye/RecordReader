@@ -768,9 +768,9 @@ class SherpaOnnxOfflineRecognizer {
 
   init(
     config: UnsafePointer<SherpaOnnxOfflineRecognizerConfig>
-  ) {
+  ) throws {
     guard let ptr = SherpaOnnxCreateOfflineRecognizer(config) else {
-      fatalError("Failed to create SherpaOnnxOfflineRecognizer")
+      throw SherpaOnnxRuntimeError.offlineRecognizerCreationFailed
     }
     self.recognizer = ptr
   }
@@ -814,6 +814,17 @@ class SherpaOnnxOfflineRecognizer {
     }
 
     return SherpaOnnxOfflineRecongitionResult(result: resultPtr)
+  }
+}
+
+enum SherpaOnnxRuntimeError: Error, LocalizedError {
+  case offlineRecognizerCreationFailed
+
+  var errorDescription: String? {
+    switch self {
+    case .offlineRecognizerCreationFailed:
+      return "无法创建本地中文识别引擎。"
+    }
   }
 }
 

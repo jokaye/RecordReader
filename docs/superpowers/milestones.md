@@ -963,3 +963,43 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:df7618c206d7b73ee0c874c42181f18ebfafb0255db45a3e51f30915a56f525d`.
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+
+### 2026-06-01 M25.2: CoreML Provider Review Hardening
+
+Status: implemented locally, awaiting cloud verification.
+
+Input:
+
+- Reviewed external report `docs/reviews/2026-06-01-coreml-provider-review.md`.
+
+Confirmed conclusions:
+
+- CoreML experiment cannot be judged by whether the recognizer throws. ONNX Runtime can fall back to CPU for unsupported nodes, so timing and provider diagnostics are required.
+- The previous `fatalError` in `SherpaOnnxOfflineRecognizer` creation could bypass the CoreML → CPU → Apple Speech fallback chain.
+- The current int8 Paraformer ONNX graph is likely a weak CoreML EP candidate until diagnostics prove meaningful graph partitioning.
+
+Partially superseded conclusion:
+
+- The report said empty CoreML output was a risk. M25.1 already addressed this by retrying CPU when CoreML returns zero subtitle segments.
+
+Fix:
+
+- Added `RecognitionProvider.runtimeDebugValue`.
+- CoreML now passes `debug: 1` into `sherpaOnnxOfflineModelConfig`; CPU keeps `debug: 0`.
+- The app logs when CoreML runtime diagnostics are enabled, with a prompt to inspect device system logs for ONNX Runtime/CoreML node assignment details.
+- Changed `SherpaOnnxOfflineRecognizer` creation from `fatalError` to a throwing initializer.
+- `SherpaOnnxTranscriber.loadEngine` now catches recognizer creation failure through its existing throwing path, so the ViewModel fallback chain can run.
+- Updated CoreML roadmap acceptance criteria to require runtime diagnostics and repeated timing data before drawing conclusions.
+
+Local verification:
+
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- A focused `swiftc -typecheck` snippet confirmed `RecognitionProvider.coreML.runtimeDebugValue` is available.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+
+Cloud verification:
+
+- Pending.

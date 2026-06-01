@@ -27,4 +27,9 @@ final class RecognitionProviderTests: XCTestCase {
         XCTAssertFalse(RecognitionProvider.cpu.shouldRetryCPUOnProviderFailure)
         XCTAssertTrue(RecognitionProvider.coreML.shouldRetryCPUOnProviderFailure)
     }
+
+    func testOnlyCoreMLProviderEnablesRuntimeDiagnostics() {
+        XCTAssertEqual(RecognitionProvider.cpu.runtimeDebugValue, 0)
+        XCTAssertEqual(RecognitionProvider.coreML.runtimeDebugValue, 1)
+    }
 }

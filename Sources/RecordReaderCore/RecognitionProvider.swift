@@ -39,4 +39,13 @@ public enum RecognitionProvider: String, CaseIterable, Equatable, Identifiable {
     public var shouldRetryCPUOnProviderFailure: Bool {
         self == .coreML
     }
+
+    public var runtimeDebugValue: Int {
+        switch self {
+        case .cpu:
+            return 0
+        case .coreML:
+            return 1
+        }
+    }
 }
