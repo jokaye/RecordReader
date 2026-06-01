@@ -829,3 +829,53 @@ Manual follow-up:
 - On a real iPhone, run the same 8 MB / 11-minute file with thread counts `1`, `2`, and `4`.
 - Record total time, subtitle count, whether the device becomes hot, and whether the app stays responsive.
 - Keep `2` as the default unless `4` is consistently faster without noticeably worse heat or responsiveness.
+
+### 2026-06-01 M24: Subtitle Recognition Performance Diagnostics
+
+Status: implemented and cloud-verified.
+
+User direction:
+
+- Add a performance diagnostics package for subtitle recognition.
+- Include per-window timing logs.
+- Add debug options for thread count `Auto / 1 / 2 / 4 / 6 / 8`.
+- Add debug options for long-audio window length `25s / 35s / 45s`.
+
+Fix:
+
+- Extended `SherpaThreadCount` to include `Auto`, `6`, and `8`, while preserving default `2` for users who have not changed settings.
+- Added `TranscriptionWindowDuration` in `RecordReaderCore` with supported values `25s`, `35s`, and `45s`.
+- Added debug UI controls for local recognition thread count and long-audio window length.
+- `AudioLibraryViewModel` now passes both debug settings into `SherpaOnnxTranscriber` when recognition starts.
+- `SherpaOnnxTranscriber` now uses the configured long-audio window length for full-coverage fixed-window recognition.
+- Added per-window logs with index, time range, recognition time, and whether the window produced subtitle text.
+- Added window timing summary logs with average window time, slowest window time, nonempty subtitle window count, and empty window count.
+
+Local verification:
+
+- `swiftc -typecheck Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed and covers the debug settings getter return issue caught by cloud Xcode.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Commit `d765aa3` passed core tests but failed `Build iOS app` because `DebugSettings` getters were missing explicit `return`.
+- Commit `9d8ecc9` simplified the debug settings SwiftUI view, but still failed on the same getter issue.
+- Commit `4861724` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `4861724`.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26738137669`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 14:04:09 +0800`.
+- Local downloaded IPA digest: `sha256:7d2e4a5b9b87976e8e381a6a23de99d799687038dbad6ae496e8aa6a4203a70c`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+
+Manual follow-up:
+
+- On a real iPhone, test the same 8 MB / 11-minute file with thread count `Auto`, `1`, `2`, `4`, `6`, and `8` while keeping window length at `25s`.
+- Then test window lengths `25s`, `35s`, and `45s` with the best thread setting from the first pass.
+- Compare debug log fields: total time, average window time, slowest window time, empty window count, subtitle count, heat, and app responsiveness.
+- Do not select a new default from one run. Use at least two repeated runs per candidate because iOS thermal state can dominate small performance differences.
