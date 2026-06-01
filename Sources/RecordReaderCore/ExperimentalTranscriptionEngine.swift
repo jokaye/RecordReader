@@ -85,3 +85,33 @@ public enum WhisperKitModelVariant: String, CaseIterable, Equatable, Identifiabl
         }
     }
 }
+
+public struct WhisperKitDecodingSettings: Equatable {
+    public let languageCode: String
+    public let concurrentWorkerCount: Int
+    public let temperatureFallbackCount: Int
+    public let usesVADChunking: Bool
+    public let usesPrefillPrompt: Bool
+
+    public init(
+        languageCode: String,
+        concurrentWorkerCount: Int,
+        temperatureFallbackCount: Int,
+        usesVADChunking: Bool,
+        usesPrefillPrompt: Bool
+    ) {
+        self.languageCode = languageCode
+        self.concurrentWorkerCount = concurrentWorkerCount
+        self.temperatureFallbackCount = temperatureFallbackCount
+        self.usesVADChunking = usesVADChunking
+        self.usesPrefillPrompt = usesPrefillPrompt
+    }
+
+    public static let qualityFirstChinese = WhisperKitDecodingSettings(
+        languageCode: "zh",
+        concurrentWorkerCount: 1,
+        temperatureFallbackCount: 0,
+        usesVADChunking: false,
+        usesPrefillPrompt: true
+    )
+}

@@ -36,22 +36,27 @@ actor WhisperKitTranscriber {
         let engine = try await loadEngine(modelVariant: modelVariant)
         progress(.recognizing(completedSegments: 0, totalSegments: nil))
 
+        let decodingSettings = WhisperKitDecodingSettings.qualityFirstChinese
         let options = DecodingOptions(
             verbose: false,
             task: .transcribe,
-            language: "zh",
+            language: decodingSettings.languageCode,
             temperature: 0,
-            usePrefillPrompt: true,
+            temperatureFallbackCount: decodingSettings.temperatureFallbackCount,
+            usePrefillPrompt: decodingSettings.usesPrefillPrompt,
+            detectLanguage: false,
             skipSpecialTokens: true,
             wordTimestamps: false,
-            concurrentWorkerCount: 2,
-            chunkingStrategy: .vad
+            concurrentWorkerCount: decodingSettings.concurrentWorkerCount,
+            chunkingStrategy: decodingSettings.usesVADChunking ? .vad : nil
         )
+        DebugLog.shared.log("WhisperKit 解码配置：language=\(decodingSettings.languageCode)，worker=\(decodingSettings.concurrentWorkerCount)，fallback=\(decodingSettings.temperatureFallbackCount)，VAD=\(decodingSettings.usesVADChunking ? "开" : "关")")
         let results = try await engine.transcribe(
             audioPath: preparedAudio.url.path,
             decodeOptions: options
         )
         let segments = Self.subtitleSegments(from: results)
+        Self.logTranscriptionDiagnostics(results, modelVariant: modelVariant)
         DebugLog.shared.log(
             String(
                 format: "WhisperKit CoreML 实验完成：模型=%@，结果=%d，字幕=%d，用时 %.2f 秒",
@@ -141,6 +146,36 @@ actor WhisperKitTranscriber {
             .sorted { lhs, rhs in
                 lhs.startTime < rhs.startTime
             }
+    }
+
+    private static func logTranscriptionDiagnostics(
+        _ results: [TranscriptionResult],
+        modelVariant: WhisperKitModelVariant
+    ) {
+        let segments = results.flatMap(\.segments)
+        let preview = segments
+            .prefix(3)
+            .map { segment in
+                segment.text
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\n", with: " ")
+            }
+            .joined(separator: " / ")
+        let languages = Set(results.map(\.language)).sorted().joined(separator: ",")
+        let avgLogProb = segments.isEmpty ? nil : segments.map(\.avgLogprob).reduce(0, +) / Float(segments.count)
+        let avgCompressionRatio = segments.isEmpty ? nil : segments.map(\.compressionRatio).reduce(0, +) / Float(segments.count)
+        DebugLog.shared.log(
+            String(
+                format: "WhisperKit 诊断：模型=%@，results=%d，segments=%d，language=%@，avgLogProb=%@，avgCompression=%@，预览=%@",
+                modelVariant.title,
+                results.count,
+                segments.count,
+                languages.isEmpty ? "无" : languages,
+                avgLogProb.map { String(format: "%.2f", $0) } ?? "无",
+                avgCompressionRatio.map { String(format: "%.2f", $0) } ?? "无",
+                preview.isEmpty ? "无" : preview
+            )
+        )
     }
 
     private static func modelCacheURL() throws -> URL {

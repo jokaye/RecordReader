@@ -46,4 +46,14 @@ final class ExperimentalTranscriptionEngineTests: XCTestCase {
         XCTAssertFalse(WhisperKitModelVariant.tiny.isBundledInExperiment)
         XCTAssertFalse(WhisperKitModelVariant.base.isBundledInExperiment)
     }
+
+    func testWhisperKitQualityFirstDecodingAvoidsAggressiveChunkingAndFallback() {
+        let settings = WhisperKitDecodingSettings.qualityFirstChinese
+
+        XCTAssertEqual(settings.languageCode, "zh")
+        XCTAssertEqual(settings.concurrentWorkerCount, 1)
+        XCTAssertEqual(settings.temperatureFallbackCount, 0)
+        XCTAssertFalse(settings.usesVADChunking)
+        XCTAssertTrue(settings.usesPrefillPrompt)
+    }
 }
