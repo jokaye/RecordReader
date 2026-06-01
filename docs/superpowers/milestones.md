@@ -1105,7 +1105,7 @@ Cloud verification:
 
 ### 2026-06-01 M26: CPU Parallel Long-Audio Recognition
 
-Status: implemented locally, awaiting cloud verification.
+Status: cloud verified.
 
 User direction:
 
@@ -1146,11 +1146,15 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `0bd8f09` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `0bd8f09`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 16:28:00 +0800`.
+- Local downloaded IPA digest: `sha256:e1c17b211bfa900286ef71757dea3e6be39dac61b7bb8668905b9a8271e397c9`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
 
 ### 2026-06-01 M27: Playlist Record Deletion and Subtitle Display Modes
 
-Status: implemented locally, awaiting cloud verification.
+Status: cloud verified.
 
 User direction:
 
@@ -1188,4 +1192,8 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `73257c3` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `73257c3`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 16:33:00 +0800`.
+- Local downloaded IPA digest: `sha256:6771cfe3f5aadbbf3ad4e98b270588dd767c7234e000111e8001ea3d68e7953c`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
