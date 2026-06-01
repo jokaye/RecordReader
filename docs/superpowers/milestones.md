@@ -1054,7 +1054,7 @@ Cloud verification:
 
 ### 2026-06-01 M25.4: Disable CoreML for Current Int8 Paraformer
 
-Status: implemented locally, awaiting cloud verification.
+Status: implemented and cloud-verified.
 
 User direction:
 
@@ -1093,4 +1093,8 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `98c249d` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `98c249d`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 15:42:00 +0800`.
+- Local downloaded IPA digest: `sha256:f37204fdf3b0f7ec52dafc67548a029eeaf5c8e2799f55247e66db589b050e16`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
