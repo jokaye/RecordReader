@@ -1154,7 +1154,7 @@ Cloud verification:
 
 ### 2026-06-01 M31: WhisperKit CoreML Experiment Branch Bootstrap
 
-Status: implemented locally, awaiting cloud verification.
+Status: cloud verified.
 
 User direction:
 
@@ -1192,7 +1192,13 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `c38a408` passed the full `iOS` workflow on `codex/whisperkit-coreml-experiment`.
+- The workflow published its IPA under branch-specific tag `codex-whisperkit-coreml-experiment-unsigned-ipa`, leaving `main`'s `latest-unsigned-ipa` untouched.
+- Latest experiment IPA was downloaded locally to `.build/github-artifacts/RecordReader-whisperkit-experiment-unsigned.ipa` at `2026-06-01 16:48:00 +0800`.
+- Local downloaded IPA digest: `sha256:4a04478a4685b001e43722fdd36cbd94dc6b6f9af468196833a3d7458accc17e`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
+- No Whisper model files are bundled yet. The app binary grew to `29,175,152` bytes, so the no-model WhisperKit dependency cost is only a small binary-code increase; model assets remain the major package-size risk.
 
 ### 2026-06-01 M27: Playlist Record Deletion and Subtitle Display Modes
 
