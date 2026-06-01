@@ -1119,11 +1119,13 @@ Design:
 - Only parallelize the long-audio full-coverage fixed-window path.
 - Keep short-audio VAD recognition unchanged.
 - Use one `SherpaOnnxOfflineRecognizer` per worker instead of sharing a recognizer across threads.
-- Keep worker count bounded to `Auto / 1 / 2 / 3`; `Auto` currently means 2 workers.
+- Keep worker count bounded to `Auto / 1 / 2 / 3`; `Auto` means 2 workers on standard devices and 3 workers on high-tier iPhones.
+- Device-aware Auto raises high-tier iPhones to 3 workers. High-tier currently means iPhone 14 Pro / 14 Pro Max (`iPhone15,2` / `iPhone15,3`) or newer.
 
 Fix:
 
 - Added `TranscriptionWorkerCount` in `RecordReaderCore`.
+- Added `TranscriptionPerformanceTier` and `DeviceProfile` so Auto can use 3 workers on iPhone 14 Pro / Pro Max or newer devices.
 - Added Debug setting `长音频并行数` with `Auto / 1 / 2 / 3`.
 - `AudioLibraryViewModel` now passes the selected worker count into `SherpaOnnxTranscriber`.
 - `SherpaOnnxTranscriber` now runs long-audio fixed windows in parallel when the effective worker count is greater than 1.
@@ -1135,7 +1137,11 @@ Local verification:
 - `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
 - `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
 - `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -typecheck` for `SherpaOnnxTranscriber.swift` plus the sherpa-onnx wrapper passed with a local `DebugLog` stub, covering the parallel worker implementation and Swift concurrency checks.
 - `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.TranscriptionWorkerCountTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
 
 Cloud verification:
 

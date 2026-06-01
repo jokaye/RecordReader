@@ -19,6 +19,7 @@ actor SherpaOnnxTranscriber {
         windowDuration: TranscriptionWindowDuration = .defaultValue,
         recognitionProvider: RecognitionProvider = .defaultValue,
         workerCount: TranscriptionWorkerCount = .defaultValue,
+        performanceTier: TranscriptionPerformanceTier = .standard,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void = { _ in }
     ) async throws -> [SubtitleSegment] {
         let startedAt = Date()
@@ -43,6 +44,7 @@ actor SherpaOnnxTranscriber {
                 windowDuration: windowDuration,
                 recognitionProvider: recognitionProvider,
                 workerCount: workerCount,
+                performanceTier: performanceTier,
                 progress: progress
             )
         }
@@ -410,10 +412,14 @@ actor SherpaOnnxTranscriber {
         windowDuration: TranscriptionWindowDuration,
         recognitionProvider: RecognitionProvider,
         workerCount: TranscriptionWorkerCount,
+        performanceTier: TranscriptionPerformanceTier,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void
     ) async throws -> [SubtitleSegment] {
         let expectedWindowCount = max(1, Int(ceil(expectedDuration / windowDuration.duration)))
-        let effectiveWorkerCount = workerCount.effectiveWorkerCount(totalWindows: expectedWindowCount)
+        let effectiveWorkerCount = workerCount.effectiveWorkerCount(
+            totalWindows: expectedWindowCount,
+            performanceTier: performanceTier
+        )
         if effectiveWorkerCount > 1 {
             return try await transcribeLongAudioInParallel(
                 asset: asset,

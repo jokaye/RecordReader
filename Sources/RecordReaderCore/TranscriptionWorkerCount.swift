@@ -1,5 +1,34 @@
 import Foundation
 
+public enum TranscriptionPerformanceTier: Equatable {
+    case standard
+    case high
+
+    public init(deviceIdentifier: String) {
+        guard deviceIdentifier.hasPrefix("iPhone") else {
+            self = .standard
+            return
+        }
+
+        let version = deviceIdentifier
+            .dropFirst("iPhone".count)
+            .split(separator: ",")
+            .compactMap { Int($0) }
+        guard let generation = version.first else {
+            self = .standard
+            return
+        }
+
+        if generation > 15 {
+            self = .high
+        } else if generation == 15, let variant = version.dropFirst().first, variant >= 2 {
+            self = .high
+        } else {
+            self = .standard
+        }
+    }
+}
+
 public enum TranscriptionWorkerCount: Int, CaseIterable, Equatable, Identifiable {
     case auto = 0
     case one = 1
@@ -23,11 +52,14 @@ public enum TranscriptionWorkerCount: Int, CaseIterable, Equatable, Identifiable
         return "\(rawValue)"
     }
 
-    public func effectiveWorkerCount(totalWindows: Int) -> Int {
+    public func effectiveWorkerCount(
+        totalWindows: Int,
+        performanceTier: TranscriptionPerformanceTier = .standard
+    ) -> Int {
         let requested: Int
         switch self {
         case .auto:
-            requested = 2
+            requested = performanceTier == .high ? 3 : 2
         case .one, .two, .three:
             requested = rawValue
         }

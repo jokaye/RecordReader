@@ -232,6 +232,7 @@ final class AudioLibraryViewModel: ObservableObject {
         let threadCount = DebugSettings.sherpaThreadCount
         let windowDuration = DebugSettings.transcriptionWindowDuration
         let workerCount = DebugSettings.transcriptionWorkerCount
+        let performanceTier = DeviceProfile.transcriptionPerformanceTier
         activeSubtitleRecognitionID = id
         subtitleRecognitionProgress = .readingAudio
         setSubtitle(
@@ -239,7 +240,7 @@ final class AudioLibraryViewModel: ObservableObject {
             for: id
         )
         statusMessage = "正在用本地中文模型识别字幕…"
-        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，后端=\(recognitionProvider.logLabel)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒，并行=\(workerCount.label)")
+        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，后端=\(recognitionProvider.logLabel)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒，并行=\(workerCount.label)，设备=\(DeviceProfile.identifier)")
 
         Task { [weak self] in
             guard let self else {
@@ -252,7 +253,8 @@ final class AudioLibraryViewModel: ObservableObject {
                     recognitionProvider: recognitionProvider,
                     threadCount: threadCount,
                     windowDuration: windowDuration,
-                    workerCount: workerCount
+                    workerCount: workerCount,
+                    performanceTier: performanceTier
                 )
                 let segments = result.segments
                 DebugLog.shared.log("sherpa-onnx 完成：\(segments.count) 段字幕")
@@ -285,7 +287,8 @@ final class AudioLibraryViewModel: ObservableObject {
         recognitionProvider: RecognitionProvider,
         threadCount: SherpaThreadCount,
         windowDuration: TranscriptionWindowDuration,
-        workerCount: TranscriptionWorkerCount
+        workerCount: TranscriptionWorkerCount,
+        performanceTier: TranscriptionPerformanceTier
     ) async throws -> (segments: [SubtitleSegment], provider: RecognitionProvider) {
         if recognitionProvider == .coreML, let unavailableCoreMLReason {
             DebugLog.shared.log("CoreML 本次会话已标记不可用：\(unavailableCoreMLReason)，直接使用 CPU")
@@ -294,7 +297,8 @@ final class AudioLibraryViewModel: ObservableObject {
                 id: id,
                 threadCount: threadCount,
                 windowDuration: windowDuration,
-                workerCount: workerCount
+                workerCount: workerCount,
+                performanceTier: performanceTier
             )
         }
 
@@ -304,7 +308,8 @@ final class AudioLibraryViewModel: ObservableObject {
                 threadCount: threadCount,
                 windowDuration: windowDuration,
                 recognitionProvider: recognitionProvider,
-                workerCount: workerCount
+                workerCount: workerCount,
+                performanceTier: performanceTier
             ) { [weak self] progress in
                 Task { @MainActor in
                     self?.setSubtitleRecognitionProgress(progress, for: id)
@@ -318,7 +323,8 @@ final class AudioLibraryViewModel: ObservableObject {
                     id: id,
                     threadCount: threadCount,
                     windowDuration: windowDuration,
-                    workerCount: workerCount
+                    workerCount: workerCount,
+                    performanceTier: performanceTier
                 )
             }
             return (segments, recognitionProvider)
@@ -334,7 +340,8 @@ final class AudioLibraryViewModel: ObservableObject {
                 id: id,
                 threadCount: threadCount,
                 windowDuration: windowDuration,
-                workerCount: workerCount
+                workerCount: workerCount,
+                performanceTier: performanceTier
             )
         }
     }
@@ -344,14 +351,16 @@ final class AudioLibraryViewModel: ObservableObject {
         id: Recording.ID,
         threadCount: SherpaThreadCount,
         windowDuration: TranscriptionWindowDuration,
-        workerCount: TranscriptionWorkerCount
+        workerCount: TranscriptionWorkerCount,
+        performanceTier: TranscriptionPerformanceTier
     ) async throws -> (segments: [SubtitleSegment], provider: RecognitionProvider) {
         let segments = try await sherpaTranscriber.transcribe(
             url: url,
             threadCount: threadCount,
             windowDuration: windowDuration,
             recognitionProvider: .cpu,
-            workerCount: workerCount
+            workerCount: workerCount,
+            performanceTier: performanceTier
         ) { [weak self] progress in
             Task { @MainActor in
                 self?.setSubtitleRecognitionProgress(progress, for: id)
