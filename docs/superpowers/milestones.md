@@ -1197,3 +1197,43 @@ Cloud verification:
 - Local downloaded IPA digest: `sha256:6771cfe3f5aadbbf3ad4e98b270588dd767c7234e000111e8001ea3d68e7953c`.
 - Local downloaded IPA size: `222M`.
 - Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
+
+### 2026-06-01 M28: Subtitle Failure Retry Audio Access Patch
+
+Status: cloud verified.
+
+User direction:
+
+- Fix a common issue where reopening the same audio after a previous subtitle recognition failure reports: "无法读取音频时长，请确认文件仍在手机本地，未被移动，并重新选择。"
+- Ship this as a patch on `main`.
+
+Diagnosis:
+
+- Subtitle status updates (`recognizing`, `failed`, `ready`) persisted metadata and then rescanned `selectedSources`.
+- That scan replaced the current `Recording` object during recognition and after failure.
+- For file-picker URLs, this can disturb the active selected URL/security-scoped access path before a retry, so duration loading may fail even though the user selected the same local file.
+
+Fix:
+
+- Added `RecordingListQuery.recordingsByApplyingMetadata(...)` and `recordingByApplyingMetadata(...)` so metadata-only updates can be applied to the current in-memory library.
+- Changed `AudioLibraryViewModel.setSubtitle(...)` to persist subtitle metadata and update the current list in memory instead of rescanning audio sources.
+- Kept existing full rescans for folder/file refresh and non-subtitle metadata paths.
+- Added a focused Core test that verifies metadata application preserves the recording file identity, URL, title, size, and modified date.
+
+Local verification:
+
+- Confirmed the new API was absent before implementation with a focused `swiftc -typecheck` snippet.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test --filter RecordingListQueryTests/testApplyingMetadataUpdatesOnlyLibraryFieldsAndKeepsFileIdentity` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+
+Cloud verification:
+
+- Commit `5860b5e` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `5860b5e`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 17:22:00 +0800`.
+- Local downloaded IPA digest: `sha256:875b08a20c3899d94ce9044a363fe79169054acee49efcd39a6279536c9c9316`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `RecordReader`, `Info.plist`, `model.int8.onnx`, `tokens.txt`, and `silero_vad.onnx` in `Payload/RecordReader.app`.
