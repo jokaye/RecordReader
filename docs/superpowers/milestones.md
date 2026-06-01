@@ -784,3 +784,48 @@ Cloud verification:
 Manual follow-up:
 
 - On a real iPhone, rerun the same 20-minute file and compare the debug log against M21. The important signal is lower memory pressure and stable completion. If speed is still insufficient, the next performance step is real-device timing comparison across `numThreads` values and a fast-mode small model A/B test.
+
+### 2026-06-01 M23: Subtitle Recognition Progress and Thread Tuning
+
+Status: implemented and cloud-verified.
+
+User direction:
+
+- Replace technical user-facing copy like `已完成窗口数 / 27` with friendlier wording.
+- Add a debug-mode thread count A/B control so real-device runs can compare sherpa-onnx `numThreads` values.
+
+Fix:
+
+- Added `SubtitleRecognitionProgress` in `RecordReaderCore` with user-facing phases for reading audio, recognizing, finalizing, and Apple Speech fallback.
+- The normal subtitle UI now says `正在生成字幕` plus copy such as `正在识别第 8 段，共 27 段`; it does not expose the technical word `窗口`.
+- `SubtitlePanel` now shows a determinate progress bar when total segment count is known and an indeterminate spinner when the recognizer cannot know the total.
+- Added `SherpaThreadCount` with supported values `1`, `2`, and `4`, defaulting to `2`.
+- Added a debug log setting labeled `本地识别线程数` with A/B copy and `改动后下次识别生效`.
+- `SherpaOnnxTranscriber` now loads the Paraformer recognizer using the selected thread count and rebuilds the cached engine when the selected value changes for a later recognition run.
+- Debug logs keep technical details including thread count and fixed-window counts for performance diagnosis.
+
+Local verification:
+
+- `swiftc -typecheck Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `xcodegen generate` passed.
+- `git diff --check` passed.
+- `swift test` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+- Direct local app typecheck remains blocked because this machine does not expose the iOS SDK to `swiftc`, so `UIKit` is unavailable outside cloud Xcode.
+
+Cloud verification:
+
+- Commit `00852cb` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `00852cb`.
+- Run: `https://github.com/jokaye/RecordReader/actions/runs/26734606510`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 12:11:54 +0800`.
+- Local downloaded IPA digest: `sha256:899af6b9ea03ff1c83a60e00b2f5a2f2dab09ff0f0952bc19948e7ced135fe59`.
+- Local downloaded IPA size: `224M` on disk.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
+- The downloaded IPA `Info.plist` is iPhone-only (`UIDeviceFamily` is `1`), contains `NSSpeechRecognitionUsageDescription`, and does not contain `NSMicrophoneUsageDescription`.
+
+Manual follow-up:
+
+- On a real iPhone, run the same 8 MB / 11-minute file with thread counts `1`, `2`, and `4`.
+- Record total time, subtitle count, whether the device becomes hot, and whether the app stays responsive.
+- Keep `2` as the default unless `4` is consistently faster without noticeably worse heat or responsiveness.
