@@ -926,7 +926,7 @@ Manual follow-up:
 
 ### 2026-06-01 M25.1: CoreML Empty Result CPU Retry
 
-Status: implemented locally, awaiting cloud verification.
+Status: implemented and cloud-verified.
 
 User report:
 
@@ -958,4 +958,8 @@ Local verification:
 
 Cloud verification:
 
-- Pending.
+- Commit `b6f06a1` passed the full `iOS` workflow and moved `latest-unsigned-ipa` to `b6f06a1`.
+- Latest IPA was downloaded locally to `.build/github-artifacts/RecordReader-unsigned.ipa` at `2026-06-01 15:20:00 +0800`.
+- Local downloaded IPA digest: `sha256:df7618c206d7b73ee0c874c42181f18ebfafb0255db45a3e51f30915a56f525d`.
+- Local downloaded IPA size: `222M`.
+- Unzipped IPA contains `model.int8.onnx` (232 MB), `tokens.txt` (74 KB), and `silero_vad.onnx` (629 KB) in `Payload/RecordReader.app`.
