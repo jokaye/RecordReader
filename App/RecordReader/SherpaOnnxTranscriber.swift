@@ -13,6 +13,7 @@ actor SherpaOnnxTranscriber {
     private var vadModelConfig: SherpaOnnxVadModelConfig?
 
     func transcribe(url: URL) async throws -> [SubtitleSegment] {
+        let startedAt = Date()
         let didStartScope = url.startAccessingSecurityScopedResource()
         defer {
             if didStartScope {
@@ -21,13 +22,30 @@ actor SherpaOnnxTranscriber {
         }
 
         let engine = try loadEngine()
-        let samples = try await decodeAudioFile(url)
+        let asset = AVURLAsset(url: url)
+        let assetDuration = try await audioDuration(for: asset)
+        if assetDuration >= Self.fullCoverageThresholdDuration {
+            return try await transcribeLongAudio(
+                asset: asset,
+                recognizer: engine.recognizer,
+                startedAt: startedAt,
+                expectedDuration: assetDuration
+            )
+        }
+
+        let decodeStartedAt = Date()
+        let samples = try await decodeAudioFile(asset)
         guard !samples.isEmpty else {
             throw SherpaOnnxTranscriberError.noDecodableAudio
         }
         let decodedDuration = TimeInterval(samples.count) / TimeInterval(Self.sampleRate)
         DebugLog.shared.log(
-            String(format: "sherpa-onnx 解码完成：%.1f 秒，%d 个采样", decodedDuration, samples.count)
+            String(
+                format: "sherpa-onnx 解码完成：%.1f 秒，%d 个采样，用时 %.2f 秒",
+                decodedDuration,
+                samples.count,
+                Date().timeIntervalSince(decodeStartedAt)
+            )
         )
 
         if TranscriptionWindowPlanner.shouldUseFullCoverage(
@@ -70,7 +88,13 @@ actor SherpaOnnxTranscriber {
             return fallback
         }
 
-        DebugLog.shared.log("sherpa-onnx VAD 识别完成：\(segments.count) 段字幕")
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx VAD 识别完成：%d 段字幕，总用时 %.2f 秒",
+                segments.count,
+                Date().timeIntervalSince(startedAt)
+            )
+        )
         return segments
     }
 
@@ -138,8 +162,29 @@ actor SherpaOnnxTranscriber {
         return url
     }
 
-    private func decodeAudioFile(_ url: URL) async throws -> [Float] {
-        let asset = AVURLAsset(url: url)
+    private func audioDuration(for asset: AVURLAsset) async throws -> TimeInterval {
+        do {
+            let duration = try await asset.load(.duration)
+            let seconds = duration.seconds
+            guard seconds.isFinite, seconds > 0 else {
+                return 0
+            }
+            return seconds
+        } catch {
+            throw SherpaOnnxTranscriberError.audioFileUnreadable("无法读取音频时长：\(error.localizedDescription)")
+        }
+    }
+
+    private func decodeAudioFile(_ asset: AVURLAsset) async throws -> [Float] {
+        var samples: [Float] = []
+        _ = try await decodeAudioFile(asset) { chunk in
+            samples.append(contentsOf: chunk)
+        }
+        return samples
+    }
+
+    @discardableResult
+    private func decodeAudioFile(_ asset: AVURLAsset, onSamples: ([Float]) throws -> Void) async throws -> Int {
         let tracks: [AVAssetTrack]
         do {
             tracks = try await asset.loadTracks(withMediaType: .audio)
@@ -179,14 +224,16 @@ actor SherpaOnnxTranscriber {
             )
         }
 
-        var samples: [Float] = []
+        var decodedSampleCount = 0
         while let sampleBuffer = readerOutput.copyNextSampleBuffer() {
-            try appendSamples(from: sampleBuffer, to: &samples)
+            let samples = try samples(from: sampleBuffer)
+            decodedSampleCount += samples.count
+            try onSamples(samples)
         }
 
         switch reader.status {
         case .completed:
-            return samples
+            return decodedSampleCount
         case .failed:
             throw SherpaOnnxTranscriberError.audioConversionFailed(
                 reader.error?.localizedDescription ?? "音频解码失败。"
@@ -200,21 +247,20 @@ actor SherpaOnnxTranscriber {
         }
     }
 
-    private func appendSamples(from sampleBuffer: CMSampleBuffer, to samples: inout [Float]) throws {
+    private func samples(from sampleBuffer: CMSampleBuffer) throws -> [Float] {
         guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
-            return
+            return []
         }
         let byteCount = CMBlockBufferGetDataLength(blockBuffer)
         guard byteCount > 0 else {
-            return
+            return []
         }
         guard byteCount.isMultiple(of: MemoryLayout<Float>.size) else {
             throw SherpaOnnxTranscriberError.audioConversionFailed("音频 PCM 数据长度异常。")
         }
 
         let sampleCount = byteCount / MemoryLayout<Float>.size
-        let insertionIndex = samples.count
-        samples.append(contentsOf: repeatElement(0, count: sampleCount))
+        var samples = Array(repeating: Float(0), count: sampleCount)
         let status = samples.withUnsafeMutableBufferPointer { buffer -> OSStatus in
             guard let baseAddress = buffer.baseAddress else {
                 return -1
@@ -223,12 +269,13 @@ actor SherpaOnnxTranscriber {
                 blockBuffer,
                 atOffset: 0,
                 dataLength: byteCount,
-                destination: UnsafeMutableRawPointer(baseAddress.advanced(by: insertionIndex))
+                destination: UnsafeMutableRawPointer(baseAddress)
             )
         }
         guard status == noErr else {
             throw SherpaOnnxTranscriberError.audioConversionFailed("无法复制 PCM 音频数据（\(status)）。")
         }
+        return samples
     }
 
     private func drainVad(engine: SherpaOnnxEngine, into segments: inout [SubtitleSegment]) {
@@ -262,19 +309,88 @@ actor SherpaOnnxTranscriber {
         var segments: [SubtitleSegment] = []
         for plannedWindow in windows {
             let window = Array(samples[plannedWindow.startSample..<plannedWindow.endSample])
-            let result = recognizer.decode(samples: window, sampleRate: Self.sampleRate)
-            let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty {
-                segments.append(
-                    SubtitleSegment(
-                        startTime: plannedWindow.startTime,
-                        endTime: plannedWindow.endTime,
-                        text: text
-                    )
-                )
+            if let segment = decodeWindow(samples: window, window: plannedWindow, recognizer: recognizer) {
+                segments.append(segment)
             }
         }
         return segments
+    }
+
+    private func transcribeLongAudio(
+        asset: AVURLAsset,
+        recognizer: SherpaOnnxOfflineRecognizer,
+        startedAt: Date,
+        expectedDuration: TimeInterval
+    ) async throws -> [SubtitleSegment] {
+        let decodeStartedAt = Date()
+        var buffer = TranscriptionWindowBuffer(
+            sampleRate: Self.sampleRate,
+            windowDuration: Self.fullCoverageWindowDuration
+        )
+        var segments: [SubtitleSegment] = []
+        var windowCount = 0
+
+        let decodedSampleCount = try await decodeAudioFile(asset) { chunk in
+            for windowSamples in buffer.append(chunk) {
+                windowCount += 1
+                if let segment = decodeWindow(
+                    samples: windowSamples.samples,
+                    window: windowSamples.window,
+                    recognizer: recognizer
+                ) {
+                    segments.append(segment)
+                }
+            }
+        }
+
+        if let finalWindow = buffer.finish() {
+            windowCount += 1
+            if let segment = decodeWindow(
+                samples: finalWindow.samples,
+                window: finalWindow.window,
+                recognizer: recognizer
+            ) {
+                segments.append(segment)
+            }
+        }
+
+        let decodedDuration = TimeInterval(decodedSampleCount) / TimeInterval(Self.sampleRate)
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx 流式长音频识别完成：预估 %.1f 秒，解码 %.1f 秒，%d 个窗口，%d 段字幕，解码+识别用时 %.2f 秒，总用时 %.2f 秒",
+                expectedDuration,
+                decodedDuration,
+                windowCount,
+                segments.count,
+                Date().timeIntervalSince(decodeStartedAt),
+                Date().timeIntervalSince(startedAt)
+            )
+        )
+
+        guard decodedSampleCount > 0 else {
+            throw SherpaOnnxTranscriberError.noDecodableAudio
+        }
+        if segments.isEmpty {
+            throw SherpaOnnxTranscriberError.noSpeechDetected
+        }
+        return segments
+    }
+
+    private func decodeWindow(
+        samples: [Float],
+        window: TranscriptionWindow,
+        recognizer: SherpaOnnxOfflineRecognizer
+    ) -> SubtitleSegment? {
+        let result = recognizer.decode(samples: samples, sampleRate: Self.sampleRate)
+        let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            return nil
+        }
+        return SubtitleSegment(
+            startTime: window.startTime,
+            endTime: window.endTime,
+            text: text
+        )
     }
 }
 

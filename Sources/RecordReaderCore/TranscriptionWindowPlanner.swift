@@ -14,6 +14,79 @@ public struct TranscriptionWindow: Equatable {
     }
 }
 
+public struct TranscriptionWindowSamples: Equatable {
+    public let window: TranscriptionWindow
+    public let samples: [Float]
+
+    public init(window: TranscriptionWindow, samples: [Float]) {
+        self.window = window
+        self.samples = samples
+    }
+}
+
+public struct TranscriptionWindowBuffer {
+    private let sampleRate: Int
+    private let windowSize: Int
+    private var nextStartSample = 0
+    private var pendingSamples: [Float] = []
+
+    public init(sampleRate: Int = 16_000, windowDuration: TimeInterval = 25) {
+        self.sampleRate = sampleRate
+        if sampleRate > 0, windowDuration > 0 {
+            self.windowSize = max(1, Int(windowDuration * TimeInterval(sampleRate)))
+        } else {
+            self.windowSize = 0
+        }
+    }
+
+    public mutating func append(_ samples: [Float]) -> [TranscriptionWindowSamples] {
+        guard windowSize > 0, !samples.isEmpty else {
+            return []
+        }
+
+        pendingSamples.append(contentsOf: samples)
+        var windows: [TranscriptionWindowSamples] = []
+        while pendingSamples.count >= windowSize {
+            let windowSamples = Array(pendingSamples.prefix(windowSize))
+            let endSample = nextStartSample + windowSamples.count
+            windows.append(
+                TranscriptionWindowSamples(
+                    window: TranscriptionWindow(
+                        startSample: nextStartSample,
+                        endSample: endSample,
+                        sampleRate: sampleRate
+                    ),
+                    samples: windowSamples
+                )
+            )
+            nextStartSample = endSample
+            pendingSamples.removeFirst(windowSize)
+        }
+        return windows
+    }
+
+    public mutating func finish() -> TranscriptionWindowSamples? {
+        guard windowSize > 0, !pendingSamples.isEmpty else {
+            return nil
+        }
+
+        let windowSamples = pendingSamples
+        let endSample = nextStartSample + windowSamples.count
+        pendingSamples = []
+        defer {
+            nextStartSample = endSample
+        }
+        return TranscriptionWindowSamples(
+            window: TranscriptionWindow(
+                startSample: nextStartSample,
+                endSample: endSample,
+                sampleRate: sampleRate
+            ),
+            samples: windowSamples
+        )
+    }
+}
+
 public enum TranscriptionWindowPlanner {
     public static func shouldUseFullCoverage(
         sampleCount: Int,
