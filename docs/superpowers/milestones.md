@@ -879,3 +879,43 @@ Manual follow-up:
 - Then test window lengths `25s`, `35s`, and `45s` with the best thread setting from the first pass.
 - Compare debug log fields: total time, average window time, slowest window time, empty window count, subtitle count, heat, and app responsiveness.
 - Do not select a new default from one run. Use at least two repeated runs per candidate because iOS thermal state can dominate small performance differences.
+
+### 2026-06-01 M25: CoreML Provider Experimental Switch
+
+Status: implemented locally, awaiting cloud verification.
+
+User direction:
+
+- Add CoreML provider as an experimental switch.
+- Expand the detailed optimization roadmap that follows this experiment.
+
+Fix:
+
+- Added `RecognitionProvider` in `RecordReaderCore` with stable values `cpu` and `coreml`; CPU remains the default.
+- Added Debug setting `本地识别后端` with `CPU` and `CoreML(实验)`.
+- `AudioLibraryViewModel` now reads the selected provider and includes it in the start log for sherpa-onnx recognition.
+- `SherpaOnnxTranscriber` now passes the selected provider into `sherpaOnnxOfflineModelConfig`.
+- The cached sherpa-onnx recognizer now includes provider in its cache key, so switching CPU/CoreML rebuilds the engine.
+- Engine-load debug logs now include provider and load time.
+- If the CoreML provider throws, the app retries sherpa-onnx with CPU before falling back to Apple Speech.
+- Added detailed roadmap: `docs/superpowers/roadmaps/2026-06-01-coreml-performance-roadmap.md`.
+
+Local verification:
+
+- `swiftc -parse Sources/RecordReaderCore/*.swift Tests/RecordReaderCoreTests/*.swift` passed.
+- `swiftc -emit-module -parse-as-library -module-name RecordReaderCore Sources/RecordReaderCore/*.swift` passed.
+- `swiftc -typecheck -I /tmp/recordreader-typecheck App/RecordReader/DebugSettings.swift` passed.
+- `swiftc -parse` for the app target sources with the sherpa-onnx bridging header and generated `RecordReaderCore` module passed.
+- `git diff --check` passed.
+- `swift test --filter RecordReaderCoreTests.RecognitionProviderTests` remains blocked on this machine because the local CommandLineTools install cannot resolve `xcrun --sdk macosx --show-sdk-platform-path`.
+- Full local app typecheck remains blocked because this machine does not expose the iOS SDK to `swiftc`, so `UIKit` is unavailable outside cloud Xcode.
+
+Cloud verification:
+
+- Pending.
+
+Manual follow-up:
+
+- On a real iPhone, compare CPU and CoreML with the same file, same thread count, and same window length.
+- Record first-run and second-run timings separately because CoreML compile/cache behavior can distort the first run.
+- Keep CPU as the product default unless CoreML improves repeat-run total time by at least 15 percent without subtitle quality loss.

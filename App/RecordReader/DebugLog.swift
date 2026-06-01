@@ -99,13 +99,23 @@ struct DebugLogView: View {
 }
 
 private struct DebugRecognitionSettingsView: View {
+    @AppStorage(DebugSettings.recognitionProviderKey) private var recognitionProviderRawValue = RecognitionProvider.defaultValue.rawValue
     @AppStorage(DebugSettings.sherpaThreadCountKey) private var sherpaThreadCountRawValue = SherpaThreadCount.defaultValue.rawValue
     @AppStorage(DebugSettings.transcriptionWindowDurationKey) private var transcriptionWindowDurationRawValue = TranscriptionWindowDuration.defaultValue.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            providerControl
             threadCountControl
             windowDurationControl
+        }
+        .onChange(of: recognitionProviderRawValue) { _, newValue in
+            let provider = RecognitionProvider(rawValueOrDefault: newValue)
+            if provider.rawValue != newValue {
+                recognitionProviderRawValue = provider.rawValue
+            }
+            DebugSettings.recognitionProvider = provider
+            DebugLog.shared.log("本地识别后端设置为 \(provider.logLabel)，下次识别生效")
         }
         .onChange(of: sherpaThreadCountRawValue) { _, newValue in
             let threadCount = SherpaThreadCount(rawValueOrDefault: newValue)
@@ -122,6 +132,26 @@ private struct DebugRecognitionSettingsView: View {
             }
             DebugSettings.transcriptionWindowDuration = duration
             DebugLog.shared.log("长音频识别窗口设置为 \(duration.rawValue) 秒，下次识别生效")
+        }
+    }
+
+    private var providerControl: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("本地识别后端", systemImage: "switch.2")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("本地识别后端", selection: $recognitionProviderRawValue) {
+                    ForEach(RecognitionProvider.allCases) { provider in
+                        Text(provider.logLabel).tag(provider.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Text("CoreML 是实验选项；失败时会先回退 CPU，再回退 iOS Speech。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

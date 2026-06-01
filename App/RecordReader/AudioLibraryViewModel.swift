@@ -227,6 +227,7 @@ final class AudioLibraryViewModel: ObservableObject {
         }
         let id = selectedRecording.id
         let url = selectedRecording.url
+        let recognitionProvider = DebugSettings.recognitionProvider
         let threadCount = DebugSettings.sherpaThreadCount
         let windowDuration = DebugSettings.transcriptionWindowDuration
         activeSubtitleRecognitionID = id
@@ -236,22 +237,21 @@ final class AudioLibraryViewModel: ObservableObject {
             for: id
         )
         statusMessage = "正在用本地中文模型识别字幕…"
-        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒")
+        DebugLog.shared.log("开始 sherpa-onnx Paraformer 识别：\(url.lastPathComponent)，后端=\(recognitionProvider.logLabel)，线程数=\(threadCount.label)，窗口=\(windowDuration.rawValue) 秒")
 
         Task { [weak self] in
             guard let self else {
                 return
             }
             do {
-                let segments = try await self.sherpaTranscriber.transcribe(
+                let result = try await self.transcribeWithSherpaFallback(
                     url: url,
+                    id: id,
+                    recognitionProvider: recognitionProvider,
                     threadCount: threadCount,
                     windowDuration: windowDuration
-                ) { [weak self] progress in
-                    Task { @MainActor in
-                        self?.setSubtitleRecognitionProgress(progress, for: id)
-                    }
-                }
+                )
+                let segments = result.segments
                 DebugLog.shared.log("sherpa-onnx 完成：\(segments.count) 段字幕")
                 if segments.isEmpty {
                     self.setSubtitle(
@@ -265,7 +265,7 @@ final class AudioLibraryViewModel: ObservableObject {
                         SubtitleDocument(status: .ready, segments: segments, errorMessage: nil),
                         for: id
                     )
-                    self.statusMessage = "字幕已生成（本地中文模型）"
+                    self.statusMessage = "字幕已生成（本地中文模型，\(result.provider.logLabel)）"
                     self.clearSubtitleRecognitionProgress(for: id)
                 }
             } catch {
@@ -273,6 +273,44 @@ final class AudioLibraryViewModel: ObservableObject {
                 self.statusMessage = "本地中文识别失败，正在改用 iOS 语音识别…"
                 self.recognizeWithAppleSpeech(url: url, id: id, primaryError: error)
             }
+        }
+    }
+
+    private func transcribeWithSherpaFallback(
+        url: URL,
+        id: Recording.ID,
+        recognitionProvider: RecognitionProvider,
+        threadCount: SherpaThreadCount,
+        windowDuration: TranscriptionWindowDuration
+    ) async throws -> (segments: [SubtitleSegment], provider: RecognitionProvider) {
+        do {
+            let segments = try await sherpaTranscriber.transcribe(
+                url: url,
+                threadCount: threadCount,
+                windowDuration: windowDuration,
+                recognitionProvider: recognitionProvider
+            ) { [weak self] progress in
+                Task { @MainActor in
+                    self?.setSubtitleRecognitionProgress(progress, for: id)
+                }
+            }
+            return (segments, recognitionProvider)
+        } catch {
+            guard recognitionProvider == .coreML else {
+                throw error
+            }
+            DebugLog.shared.log("CoreML 后端失败：\(error.localizedDescription)，正在回退 CPU")
+            let segments = try await sherpaTranscriber.transcribe(
+                url: url,
+                threadCount: threadCount,
+                windowDuration: windowDuration,
+                recognitionProvider: .cpu
+            ) { [weak self] progress in
+                Task { @MainActor in
+                    self?.setSubtitleRecognitionProgress(progress, for: id)
+                }
+            }
+            return (segments, .cpu)
         }
     }
 

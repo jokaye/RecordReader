@@ -11,11 +11,13 @@ actor SherpaOnnxTranscriber {
     private var vad: SherpaOnnxVoiceActivityDetectorWrapper?
     private var vadModelConfig: SherpaOnnxVadModelConfig?
     private var loadedThreadCount: SherpaThreadCount?
+    private var loadedRecognitionProvider: RecognitionProvider?
 
     func transcribe(
         url: URL,
         threadCount: SherpaThreadCount = .defaultValue,
         windowDuration: TranscriptionWindowDuration = .defaultValue,
+        recognitionProvider: RecognitionProvider = .defaultValue,
         progress: @escaping @Sendable (SubtitleRecognitionProgress) -> Void = { _ in }
     ) async throws -> [SubtitleSegment] {
         let startedAt = Date()
@@ -27,7 +29,7 @@ actor SherpaOnnxTranscriber {
         }
 
         progress(.readingAudio)
-        let engine = try loadEngine(threadCount: threadCount)
+        let engine = try loadEngine(threadCount: threadCount, recognitionProvider: recognitionProvider)
         let asset = AVURLAsset(url: url)
         let assetDuration = try await audioDuration(for: asset)
         if assetDuration >= Self.fullCoverageThresholdDuration {
@@ -120,10 +122,18 @@ actor SherpaOnnxTranscriber {
         return segments
     }
 
-    private func loadEngine(threadCount: SherpaThreadCount) throws -> SherpaOnnxEngine {
-        if let recognizer, let vad, let vadModelConfig, loadedThreadCount == threadCount {
+    private func loadEngine(
+        threadCount: SherpaThreadCount,
+        recognitionProvider: RecognitionProvider
+    ) throws -> SherpaOnnxEngine {
+        if let recognizer,
+           let vad,
+           let vadModelConfig,
+           loadedThreadCount == threadCount,
+           loadedRecognitionProvider == recognitionProvider {
             return SherpaOnnxEngine(recognizer: recognizer, vad: vad, vadModelConfig: vadModelConfig)
         }
+        let loadStartedAt = Date()
 
         let model = try bundledResource(
             name: "model.int8",
@@ -149,6 +159,7 @@ actor SherpaOnnxTranscriber {
             tokens: tokens.path,
             paraformer: sherpaOnnxOfflineParaformerModelConfig(model: model.path),
             numThreads: threadCount.rawValue,
+            provider: recognitionProvider.rawValue,
             modelType: "paraformer"
         )
         var recognizerConfig = sherpaOnnxOfflineRecognizerConfig(
@@ -168,7 +179,15 @@ actor SherpaOnnxTranscriber {
         self.vad = vad
         self.vadModelConfig = vadModelConfig
         self.loadedThreadCount = threadCount
-        DebugLog.shared.log("sherpa-onnx 引擎已加载：线程数=\(threadCount.label)")
+        self.loadedRecognitionProvider = recognitionProvider
+        DebugLog.shared.log(
+            String(
+                format: "sherpa-onnx 引擎已加载：线程数=%@，后端=%@，用时 %.2f 秒",
+                threadCount.label,
+                recognitionProvider.logLabel,
+                Date().timeIntervalSince(loadStartedAt)
+            )
+        )
         return SherpaOnnxEngine(recognizer: recognizer, vad: vad, vadModelConfig: vadModelConfig)
     }
 

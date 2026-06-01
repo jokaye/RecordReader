@@ -2,8 +2,21 @@ import Foundation
 import RecordReaderCore
 
 enum DebugSettings {
+    static let recognitionProviderKey = "debug.recognitionProvider"
     static let sherpaThreadCountKey = "debug.sherpaThreadCount"
     static let transcriptionWindowDurationKey = "debug.transcriptionWindowDuration"
+
+    static var recognitionProvider: RecognitionProvider {
+        get {
+            guard let value = UserDefaults.standard.string(forKey: recognitionProviderKey) else {
+                return .defaultValue
+            }
+            return RecognitionProvider(rawValueOrDefault: value)
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: recognitionProviderKey)
+        }
+    }
 
     static var sherpaThreadCount: SherpaThreadCount {
         get {
