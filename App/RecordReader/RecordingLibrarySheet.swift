@@ -4,6 +4,7 @@ import SwiftUI
 struct RecordingLibrarySheet: View {
     @ObservedObject var library: AudioLibraryViewModel
     let onSelect: (Recording) -> Void
+    @Environment(\.appTheme) private var theme
     @State private var isBatchMode = false
     @State private var selectedIDs: Set<Recording.ID> = []
     @State private var isBatchCategoryPresented = false
@@ -15,17 +16,16 @@ struct RecordingLibrarySheet: View {
         NavigationStack {
             List {
                 Section {
-                    filterButton(.all, title: "全部录音", systemImage: "tray.full")
-                    filterButton(.favorites, title: "收藏", systemImage: "heart")
-                    ForEach(library.categories, id: \.self) { category in
-                        filterButton(.category(category), title: category, systemImage: "tag")
-                    }
+                    filterStrip
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 16))
+                        .listRowBackground(Color.clear)
                 }
 
                 Section {
                     ForEach(library.visibleRecordings) { recording in
                         recordingRow(recording)
                             .listRowBackground(rowBackground(for: recording))
+                            .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     requestDelete(ids: [recording.id])
@@ -39,6 +39,10 @@ struct RecordingLibrarySheet: View {
                 }
             }
             .navigationTitle("录音")
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundGradient)
+            .tint(theme.accent)
             .searchable(text: $library.searchText, prompt: "搜索标题、分类或格式")
             .safeAreaInset(edge: .bottom) {
                 if isBatchMode {
@@ -111,6 +115,20 @@ struct RecordingLibrarySheet: View {
             .animation(.easeOut(duration: 0.18), value: isBatchMode)
             .animation(.easeOut(duration: 0.18), value: selectedIDs)
         }
+        .preferredColorScheme(theme.mode.colorScheme)
+    }
+
+    private var filterStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                filterChip(.all, title: "全部", systemImage: "tray.full")
+                filterChip(.favorites, title: "收藏", systemImage: "heart")
+                ForEach(library.categories, id: \.self) { category in
+                    filterChip(.category(category), title: category, systemImage: "tag")
+                }
+            }
+            .padding(.vertical, 2)
+        }
     }
 
     private func recordingRow(_ recording: Recording) -> some View {
@@ -127,30 +145,36 @@ struct RecordingLibrarySheet: View {
             HStack(spacing: 12) {
                 if isBatchMode {
                     Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isChecked ? Color.accentColor : Color.secondary)
-                        .frame(width: 24)
+                        .foregroundStyle(isChecked ? theme.accent : theme.mutedText)
+                        .frame(width: 34, height: 34)
                 } else {
                     Image(systemName: isSelected ? "play.circle.fill" : (recording.isFavorite ? "heart.fill" : "waveform"))
-                        .foregroundStyle(recording.isFavorite ? .red : .secondary)
-                        .frame(width: 24)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(recording.isFavorite ? theme.accent : theme.secondaryText)
+                        .frame(width: 34, height: 34)
+                        .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 8))
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(recording.title)
                         .font(.headline)
+                        .foregroundStyle(theme.primaryText)
                         .lineLimit(1)
                     Text(recording.category ?? "未分类")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                 }
 
                 Spacer()
 
                 Text(recording.fileExtension.uppercased())
                     .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(theme.subtleFill, in: Capsule())
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
     }
@@ -199,12 +223,19 @@ struct RecordingLibrarySheet: View {
         .font(.callout.weight(.semibold))
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
-        .background(.bar)
+        .background(theme.elevatedCard)
+        .overlay(
+            Rectangle()
+                .fill(theme.cardStroke)
+                .frame(height: 1),
+            alignment: .top
+        )
+        .shadow(color: theme.cardShadow, radius: 18, y: -6)
         .disabled(selectedIDs.isEmpty)
         .opacity(selectedIDs.isEmpty ? 0.58 : 1)
     }
 
-    private func filterButton(_ filter: RecordingFilter, title: String, systemImage: String) -> some View {
+    private func filterChip(_ filter: RecordingFilter, title: String, systemImage: String) -> some View {
         Button {
             withAnimation(.easeOut(duration: 0.18)) {
                 library.setFilter(filter)
@@ -212,7 +243,14 @@ struct RecordingLibrarySheet: View {
             }
         } label: {
             Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(chipBackground(for: filter), in: Capsule())
+                .foregroundStyle(chipForeground(for: filter))
         }
+        .buttonStyle(.plain)
     }
 
     private func requestDelete(ids: Set<Recording.ID>) {
@@ -225,9 +263,17 @@ struct RecordingLibrarySheet: View {
 
     private func rowBackground(for recording: Recording) -> Color {
         guard library.selectedRecording?.id == recording.id else {
-            return Color.clear
+            return theme.elevatedCard
         }
-        return Color.accentColor.opacity(0.12)
+        return theme.softAccent.opacity(0.78)
+    }
+
+    private func chipBackground(for filter: RecordingFilter) -> Color {
+        library.filter == filter ? theme.accent : theme.elevatedCard
+    }
+
+    private func chipForeground(for filter: RecordingFilter) -> Color {
+        library.filter == filter ? Color.white : theme.secondaryText
     }
 
     private func toggleSelection(_ id: Recording.ID) {

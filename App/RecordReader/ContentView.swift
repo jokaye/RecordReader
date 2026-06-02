@@ -3,11 +3,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    @AppStorage("recordReader.themeMode") private var themeModeRawValue = AppThemeMode.light.rawValue
     @StateObject private var library = AudioLibraryViewModel()
     @StateObject private var player = PlayerController()
     @State private var activeImportMode: ImportMode?
     @State private var isLibraryPresented = false
     @State private var isDebugLogPresented = false
+    @State private var isSettingsPresented = false
     @State private var isCategoryEditorPresented = false
     @State private var pendingCategory = ""
     @State private var seekDraftProgress: Double?
@@ -16,9 +18,9 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color.playerBackground.ignoresSafeArea()
+                theme.backgroundGradient.ignoresSafeArea()
 
-                VStack(spacing: 24) {
+                VStack(spacing: 20) {
                     header
 
                     if let statusMessage = library.statusMessage {
@@ -36,17 +38,18 @@ struct ContentView: View {
                     }
 
                     Spacer(minLength: 12)
-                    bottomBar
                 }
                 .padding(.horizontal, 24)
-                .padding(.vertical, 18)
+                .padding(.vertical, 16)
                 .frame(maxWidth: 430, maxHeight: .infinity)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeOut(duration: 0.2), value: library.statusMessage)
                 .animation(.easeOut(duration: 0.22), value: library.selectedRecording?.id)
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(theme.primaryText)
+        .environment(\.appTheme, theme)
+        .preferredColorScheme(selectedThemeMode.colorScheme)
         .background(
             DocumentPickerPresenter(mode: $activeImportMode) { urls in
                 DebugLog.shared.log("ContentView 收到回调：\(urls.count) 个 URL")
@@ -55,6 +58,12 @@ struct ContentView: View {
         )
         .sheet(isPresented: $isDebugLogPresented) {
             DebugLogView()
+        }
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsView(themeMode: themeModeBinding) {
+                isDebugLogPresented = true
+            }
+            .preferredColorScheme(selectedThemeMode.colorScheme)
         }
         .sheet(isPresented: $isLibraryPresented) {
             RecordingLibrarySheet(library: library) { recording in
@@ -92,38 +101,21 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack {
-            Button {
-                presentImporter(.folder)
-            } label: {
-                Image(systemName: "folder")
-                    .font(.title2.weight(.semibold))
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("RecordReader")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(theme.primaryText)
+                Text(library.currentFilterTitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.mutedText)
             }
-            .accessibilityLabel("选择录音文件夹")
 
-            Button {
-                presentImporter(.audio)
-            } label: {
-                Image(systemName: "waveform.badge.plus")
-                    .font(.title2.weight(.semibold))
+            Spacer(minLength: 12)
+
+            if library.selectedRecording != nil {
+                importMenu
             }
-            .accessibilityLabel("选择音频文件")
-
-            Spacer()
-
-            Text(library.currentFilterTitle)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.82))
-
-            Spacer()
-
-            Button {
-                isDebugLogPresented = true
-            } label: {
-                Image(systemName: "ladybug")
-                    .font(.title2.weight(.semibold))
-            }
-            .accessibilityLabel("调试日志")
 
             Button {
                 isLibraryPresented = true
@@ -132,22 +124,50 @@ struct ContentView: View {
                     .font(.title2.weight(.semibold))
             }
             .accessibilityLabel("显示录音列表")
+
+            Button {
+                isSettingsPresented = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.title2.weight(.semibold))
+            }
+            .accessibilityLabel("设置")
         }
         .buttonStyle(IconPressButtonStyle())
+    }
+
+    private var importMenu: some View {
+        Menu {
+            Button {
+                presentImporter(.audio)
+            } label: {
+                Label("选择音频", systemImage: "waveform.badge.plus")
+            }
+
+            Button {
+                presentImporter(.folder)
+            } label: {
+                Label("选择文件夹", systemImage: "folder.badge.plus")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+        }
+        .accessibilityLabel("导入录音")
     }
 
     private func statusCapsule(_ message: String) -> some View {
         Label(message, systemImage: statusIcon(for: message))
             .font(.footnote.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.82))
+            .foregroundStyle(theme.secondaryText)
             .lineLimit(2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .background(.white.opacity(0.08), in: Capsule())
+            .background(theme.subtleFill, in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
+                    .stroke(theme.cardStroke, lineWidth: 1)
             )
     }
 
@@ -169,12 +189,14 @@ struct ContentView: View {
                 displayMode: $subtitleDisplayMode,
                 errorMessage: library.errorMessage,
                 recognitionProgress: library.subtitleRecognitionProgress
-            )
+            ) {
+                library.recognizeSubtitleForSelectedRecording()
+            }
                 .frame(maxWidth: .infinity)
                 .frame(height: subtitlePanelHeight)
                 .id(recording.id)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(recording.title)
@@ -184,7 +206,7 @@ struct ContentView: View {
 
                         Text(recording.category ?? "未分类")
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(theme.secondaryText)
                     }
 
                     Spacer()
@@ -196,15 +218,12 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: recording.isFavorite ? "heart.fill" : "heart")
                             .font(.title2.weight(.bold))
-                            .foregroundStyle(recording.isFavorite ? .white : .white.opacity(0.72))
+                            .foregroundStyle(recording.isFavorite ? theme.accent : theme.secondaryText)
                     }
                     .buttonStyle(IconPressButtonStyle())
                     .accessibilityLabel(recording.isFavorite ? "取消收藏" : "收藏录音")
 
                     Menu {
-                        Button("识别中文字幕") {
-                            library.recognizeSubtitleForSelectedRecording()
-                        }
                         Button("编辑分类") {
                             pendingCategory = recording.category ?? ""
                             isCategoryEditorPresented = true
@@ -227,7 +246,7 @@ struct ContentView: View {
                         }
                     }
                 )
-                .tint(.white)
+                .tint(theme.accent)
                 .accessibilityLabel("播放进度")
 
                 HStack {
@@ -240,8 +259,8 @@ struct ContentView: View {
                             .font(.caption.weight(.semibold).monospacedDigit())
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
-                            .background(.white.opacity(0.14))
-                            .foregroundStyle(.white)
+                            .background(theme.subtleFill)
+                            .foregroundStyle(theme.primaryText)
                             .clipShape(Capsule())
                     }
                     .buttonStyle(ScalePressButtonStyle())
@@ -250,8 +269,18 @@ struct ContentView: View {
                     Text(player.durationLabel)
                 }
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(theme.secondaryText)
             }
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(theme.elevatedCard)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(theme.cardStroke, lineWidth: 1)
+            )
+            .shadow(color: theme.cardShadow, radius: 18, y: 10)
 
             HStack(spacing: 24) {
                 Button {
@@ -284,9 +313,9 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(theme.controlForeground)
                         .frame(width: 74, height: 74)
-                        .background(.white)
+                        .background(theme.controlFill)
                         .clipShape(Circle())
                 }
                 .buttonStyle(PlayPressButtonStyle())
@@ -335,20 +364,20 @@ struct ContentView: View {
             Spacer()
             Image(systemName: "waveform")
                 .font(.system(size: 54, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.82))
+                .foregroundStyle(theme.secondaryText)
             Text("选择录音文件夹或音频文件")
                 .font(.title2.weight(.bold))
             Text("扫描手机可访问的录音文件，支持播放、收藏、分类和中文语音转字幕。")
                 .font(.body)
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(theme.secondaryText)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
             if library.isLoading {
                 ProgressView()
-                    .tint(.white)
+                    .tint(theme.accent)
                 Text("正在扫描录音...")
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(theme.secondaryText)
             } else if let errorMessage = library.errorMessage {
                 Text(errorMessage)
                     .font(.footnote.weight(.medium))
@@ -374,50 +403,6 @@ struct ContentView: View {
         }
     }
 
-    private var bottomBar: some View {
-        HStack {
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    library.setFilter(.all)
-                }
-            } label: {
-                Image(systemName: "tray.full")
-            }
-            .foregroundStyle(library.filter == .all ? .white : .white.opacity(0.58))
-
-            Spacer()
-
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    library.setFilter(.favorites)
-                }
-            } label: {
-                Image(systemName: "heart")
-            }
-            .foregroundStyle(library.filter == .favorites ? .white : .white.opacity(0.58))
-
-            Spacer()
-
-            Button {
-                isLibraryPresented = true
-            } label: {
-                Image(systemName: "text.line.first.and.arrowtriangle.forward")
-            }
-
-            Spacer()
-
-            Button {
-                pendingCategory = library.selectedRecording?.category ?? ""
-                isCategoryEditorPresented = true
-            } label: {
-                Image(systemName: "tag")
-            }
-            .disabled(library.selectedRecording == nil)
-        }
-        .font(.title2.weight(.semibold))
-        .buttonStyle(IconPressButtonStyle())
-    }
-
     private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
         min(max(availableHeight * 0.42, 260), 430)
     }
@@ -436,6 +421,21 @@ struct ContentView: View {
                 seekDraftProgress = newValue
             }
         )
+    }
+
+    private var selectedThemeMode: AppThemeMode {
+        AppThemeMode(rawValue: themeModeRawValue) ?? .light
+    }
+
+    private var themeModeBinding: Binding<AppThemeMode> {
+        Binding(
+            get: { selectedThemeMode },
+            set: { themeModeRawValue = $0.rawValue }
+        )
+    }
+
+    private var theme: AppTheme {
+        AppTheme(mode: selectedThemeMode)
     }
 }
 
@@ -484,30 +484,34 @@ private struct ScalePressButtonStyle: ButtonStyle {
 }
 
 private struct FilledCapsuleButtonStyle: ButtonStyle {
+    @Environment(\.appTheme) private var theme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .background(.white.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
-            .foregroundStyle(.black)
+            .background(theme.accent.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
+            .foregroundStyle(.white)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
 
 private struct SecondaryCapsuleButtonStyle: ButtonStyle {
+    @Environment(\.appTheme) private var theme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .background(.white.opacity(configuration.isPressed ? 0.2 : 0.14), in: Capsule())
+            .background(theme.subtleFill.opacity(configuration.isPressed ? 0.76 : 1), in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
+                    .stroke(theme.cardStroke, lineWidth: 1)
             )
-            .foregroundStyle(.white)
+            .foregroundStyle(theme.primaryText)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }

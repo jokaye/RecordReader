@@ -7,6 +7,8 @@ struct SubtitlePanel: View {
     @Binding var displayMode: SubtitleDisplayMode
     let errorMessage: String?
     let recognitionProgress: SubtitleRecognitionProgress?
+    let onRecognize: () -> Void
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -17,7 +19,7 @@ struct SubtitlePanel: View {
                 Spacer()
                 Text(recording.fileExtension.uppercased())
                     .font(.caption.monospaced())
-                    .foregroundStyle(.white.opacity(0.58))
+                    .foregroundStyle(theme.mutedText)
             }
 
             if let subtitle = recording.subtitle, !subtitle.segments.isEmpty {
@@ -37,15 +39,24 @@ struct SubtitlePanel: View {
                     }
                     Text(primaryStatusMessage)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.76))
+                        .foregroundStyle(theme.secondaryText)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                     if let secondaryStatusMessage {
                         Text(secondaryStatusMessage)
                             .font(.footnote.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.56))
+                            .foregroundStyle(theme.mutedText)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
+                    }
+                    if shouldShowRecognitionAction {
+                        Button {
+                            onRecognize()
+                        } label: {
+                            Label(recognitionActionTitle, systemImage: "waveform.badge.magnifyingglass")
+                        }
+                        .buttonStyle(SubtitleActionButtonStyle())
+                        .padding(.top, 4)
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -63,11 +74,11 @@ struct SubtitlePanel: View {
         .padding(22)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.075))
+                .fill(theme.card)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(statusColor.opacity(status == .failed ? 0.34 : 0.12), lineWidth: 1)
+                .stroke(status == .failed ? statusColor.opacity(0.34) : theme.cardStroke, lineWidth: 1)
         )
         .animation(.easeOut(duration: 0.22), value: status)
         .animation(.easeOut(duration: 0.22), value: recording.subtitle?.segments.count ?? 0)
@@ -108,21 +119,21 @@ struct SubtitlePanel: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(timeRange(segment))
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(isActive ? .white.opacity(0.76) : .white.opacity(0.5))
+                .foregroundStyle(isActive ? theme.secondaryText : theme.mutedText)
             Text(segment.text)
                 .font(isActive ? .body.weight(.semibold) : .body.weight(.medium))
-                .foregroundStyle(isActive ? .white : .white.opacity(0.78))
+                .foregroundStyle(isActive ? theme.primaryText : theme.secondaryText)
                 .lineSpacing(4)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isActive && displayMode == .follow ? Color.white.opacity(0.14) : Color.clear)
+                .fill(isActive && displayMode == .follow ? theme.subtleFill : Color.clear)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isActive && displayMode == .follow ? Color.white.opacity(0.22) : Color.clear, lineWidth: 1)
+                .stroke(isActive && displayMode == .follow ? theme.cardStroke : Color.clear, lineWidth: 1)
         )
         .transition(.opacity)
     }
@@ -177,9 +188,9 @@ struct SubtitlePanel: View {
     private var statusColor: Color {
         switch status {
         case .notStarted:
-            return .white.opacity(0.82)
+            return theme.secondaryText
         case .recognizing:
-            return .white.opacity(0.9)
+            return theme.accent
         case .ready:
             return .green.opacity(0.82)
         case .failed:
@@ -190,7 +201,7 @@ struct SubtitlePanel: View {
     private var statusMessage: String {
         switch status {
         case .notStarted:
-            return "点击更多操作，为这段录音识别中文字幕。"
+            return "为这段录音生成中文字幕。"
         case .recognizing:
             return recognitionProgress?.detail ?? "正在读取录音并生成中文字幕。"
         case .ready:
@@ -214,17 +225,34 @@ struct SubtitlePanel: View {
         return statusMessage
     }
 
+    private var shouldShowRecognitionAction: Bool {
+        status == .notStarted || status == .failed || status == .ready
+    }
+
+    private var recognitionActionTitle: String {
+        switch status {
+        case .notStarted:
+            return "生成字幕"
+        case .ready:
+            return "重新识别"
+        case .failed:
+            return "重试识别"
+        case .recognizing:
+            return "正在识别"
+        }
+    }
+
     @ViewBuilder
     private var recognitionProgressView: some View {
         if let fraction = recognitionProgress?.fractionCompleted {
             ProgressView(value: fraction)
                 .progressViewStyle(.linear)
-                .tint(.white.opacity(0.86))
+                .tint(theme.accent)
                 .frame(maxWidth: 220)
                 .controlSize(.small)
         } else {
             ProgressView()
-                .tint(.white)
+                .tint(theme.accent)
                 .scaleEffect(1.08)
         }
     }
@@ -236,5 +264,20 @@ struct SubtitlePanel: View {
     private func format(_ value: TimeInterval) -> String {
         let totalSeconds = max(0, Int(value.rounded()))
         return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
+private struct SubtitleActionButtonStyle: ButtonStyle {
+    @Environment(\.appTheme) private var theme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(.semibold))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(theme.accent.opacity(configuration.isPressed ? 0.78 : 1), in: Capsule())
+            .foregroundStyle(.white)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
