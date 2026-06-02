@@ -447,20 +447,27 @@ final class AudioLibraryViewModel: ObservableObject {
     }
 
     private func open(urls: [URL], persistFolderBookmarkIfPossible: Bool) {
+        let previouslySelectedID = selectedRecording?.id
+        let nextSources = mergedSourceURLs(selectedSources + urls)
+
         releaseSecurityScopedURLs()
-        activeSecurityScopedURLs = urls.filter { url in
+        activeSecurityScopedURLs = nextSources.filter { url in
             let granted = url.startAccessingSecurityScopedResource()
             DebugLog.shared.log("安全作用域 \(url.lastPathComponent)：\(granted ? "已获取" : "未获取（可能仍可访问）")")
             return granted
         }
-        selectedSources = urls
-        selectedFolder = singleSelectedFolder(from: urls)
+        selectedSources = nextSources
+        if let importedFolder = singleSelectedFolder(from: urls) {
+            selectedFolder = importedFolder
+        } else if selectedFolder == nil {
+            selectedFolder = singleSelectedFolder(from: nextSources)
+        }
         filter = .all
         searchText = ""
 
-        if persistFolderBookmarkIfPossible, let selectedFolder {
+        if persistFolderBookmarkIfPossible, let importedFolder = singleSelectedFolder(from: urls) {
             do {
-                metadata.selectedFolderBookmark = try selectedFolder.bookmarkData(
+                metadata.selectedFolderBookmark = try importedFolder.bookmarkData(
                     options: [],
                     includingResourceValuesForKeys: nil,
                     relativeTo: nil
@@ -469,19 +476,18 @@ final class AudioLibraryViewModel: ObservableObject {
             } catch {
                 errorMessage = "无法保存录音文件夹权限：\(error.localizedDescription)"
             }
-        } else if persistFolderBookmarkIfPossible {
-            metadata.selectedFolderBookmark = nil
-            do {
-                try persistMetadata()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
         }
 
-        loadRecordings(from: urls)
+        let addedSourceKeys = Set(urls.map(sourceKey(for:)))
+        loadRecordings(from: nextSources, preferredSourceKeys: addedSourceKeys, previousSelectionID: previouslySelectedID)
     }
 
-    private func loadRecordings(from urls: [URL], preserveSelection: Bool = false) {
+    private func loadRecordings(
+        from urls: [URL],
+        preserveSelection: Bool = false,
+        preferredSourceKeys: Set<String> = [],
+        previousSelectionID: Recording.ID? = nil
+    ) {
         isLoading = true
         defer {
             isLoading = false
@@ -500,6 +506,11 @@ final class AudioLibraryViewModel: ObservableObject {
                let currentID = selectedRecording?.id,
                let stillPresent = recordings.first(where: { $0.id == currentID }) {
                 selectedRecording = stillPresent
+            } else if let importedSelection = preferredSelectionAfterAddingSources(
+                sourceKeys: preferredSourceKeys,
+                previousSelectionID: previousSelectionID
+            ) {
+                selectedRecording = importedSelection
             } else {
                 selectedRecording = preferredSelectionAfterLoad
             }
@@ -516,6 +527,26 @@ final class AudioLibraryViewModel: ObservableObject {
 
     private var preferredSelectionAfterLoad: Recording? {
         RecordingListQuery.initialSelectionAfterImport(recordings, sort: sort)
+    }
+
+    private func preferredSelectionAfterAddingSources(
+        sourceKeys: Set<String>,
+        previousSelectionID: Recording.ID?
+    ) -> Recording? {
+        guard !sourceKeys.isEmpty else {
+            return nil
+        }
+        let directlyAddedRecordings = recordings.filter { recording in
+            sourceKeys.contains(recording.id)
+        }
+        if let latestDirectlyAdded = RecordingListQuery.initialSelectionAfterImport(directlyAddedRecordings, sort: sort) {
+            return latestDirectlyAdded
+        }
+        if let previousSelectionID,
+           let stillPresent = recordings.first(where: { $0.id == previousSelectionID }) {
+            return stillPresent
+        }
+        return nil
     }
 
     private enum MetadataRefreshStrategy {
@@ -644,6 +675,24 @@ final class AudioLibraryViewModel: ObservableObject {
             return nil
         }
         return url
+    }
+
+    private func mergedSourceURLs(_ urls: [URL]) -> [URL] {
+        var seenKeys: Set<String> = []
+        var merged: [URL] = []
+        for url in urls {
+            let key = sourceKey(for: url)
+            guard !seenKeys.contains(key) else {
+                continue
+            }
+            seenKeys.insert(key)
+            merged.append(url)
+        }
+        return merged
+    }
+
+    private func sourceKey(for url: URL) -> String {
+        url.resolvingSymlinksInPath().standardizedFileURL.path
     }
 }
 
