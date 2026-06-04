@@ -245,17 +245,7 @@ struct SubtitlePanel: View {
 
     @ViewBuilder
     private var recognitionProgressView: some View {
-        if let fraction = recognitionProgress?.fractionCompleted {
-            ProgressView(value: fraction)
-                .progressViewStyle(.linear)
-                .tint(theme.accent)
-                .frame(maxWidth: 220)
-                .controlSize(.small)
-        } else {
-            ProgressView()
-                .tint(theme.accent)
-                .scaleEffect(1.08)
-        }
+        NeonLoadingIndicator(progress: recognitionProgress?.fractionCompleted)
     }
 
     private func timeRange(_ segment: SubtitleSegment) -> String {
@@ -280,6 +270,9 @@ private struct SubtitleActionButtonStyle: ButtonStyle {
             .foregroundStyle(theme.primaryText)
             .shadow(color: theme.accent.opacity(configuration.isPressed ? 0.08 : 0.18), radius: 18, y: 9)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .overlay(
+                GlowPressOverlay(shape: .capsule, isPressed: configuration.isPressed)
+            )
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }

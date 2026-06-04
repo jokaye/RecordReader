@@ -2,7 +2,7 @@ name: iOS
 
 on:
   push:
-    branches: [main]
+    branches: [main, UI-animate]
   pull_request:
     branches: [main]
   workflow_dispatch:

@@ -115,7 +115,9 @@ struct ContentView: View {
 
             Spacer(minLength: 12)
 
-            importMenu
+            if !library.recordings.isEmpty {
+                importMenu
+            }
 
             Button {
                 isLibraryPresented = true
@@ -289,8 +291,6 @@ struct ContentView: View {
             }
 
             playbackControls
-
-            bottomNavigation
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
@@ -386,62 +386,6 @@ struct ContentView: View {
         .accessibilityLabel("下一首")
     }
 
-    private var bottomNavigation: some View {
-        HStack {
-            bottomNavigationItem(
-                title: "Library",
-                systemImage: "rectangle.stack.fill",
-                isSelected: library.filter == .all
-            ) {
-                library.setFilter(.all)
-                isLibraryPresented = true
-            }
-
-            Spacer()
-
-            bottomNavigationItem(title: "Record", systemImage: "mic.fill", isSelected: false) {
-                presentImporter(.audio)
-            }
-
-            Spacer()
-
-            bottomNavigationItem(
-                title: "Favorites",
-                systemImage: library.filter == .favorites ? "star.fill" : "star",
-                isSelected: library.filter == .favorites
-            ) {
-                library.setFilter(.favorites)
-                isLibraryPresented = true
-            }
-
-            Spacer()
-
-            bottomNavigationItem(title: "Folders", systemImage: "folder", isSelected: false) {
-                presentImporter(.folder)
-            }
-        }
-        .padding(.top, 2)
-    }
-
-    private func bottomNavigationItem(
-        title: String,
-        systemImage: String,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                Image(systemName: systemImage)
-                    .font(.title3.weight(.semibold))
-                Text(title)
-                    .font(.caption2.weight(.bold))
-            }
-            .frame(width: 66)
-            .foregroundStyle(isSelected ? theme.accent : theme.mutedText)
-        }
-        .buttonStyle(ScalePressButtonStyle())
-    }
-
     private var emptyState: some View {
         VStack(spacing: 18) {
             Spacer()
@@ -455,9 +399,9 @@ struct ContentView: View {
                 .foregroundStyle(theme.secondaryText)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
+            emptyImportMenu
             if library.isLoading {
-                ProgressView()
-                    .tint(theme.accent)
+                NeonLoadingIndicator(progress: nil)
                 Text("正在扫描录音...")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(theme.secondaryText)
@@ -468,10 +412,28 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
             }
             Spacer()
-            bottomNavigation
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
         }
+        .padding(.horizontal, 34)
+    }
+
+    private var emptyImportMenu: some View {
+        Menu {
+            Button {
+                presentImporter(.audio)
+            } label: {
+                Label("选择音频", systemImage: "waveform.badge.plus")
+            }
+
+            Button {
+                presentImporter(.folder)
+            } label: {
+                Label("选择文件夹", systemImage: "folder.badge.plus")
+            }
+        } label: {
+            Label("添加录音", systemImage: "plus")
+        }
+        .buttonStyle(FilledCapsuleButtonStyle())
+        .accessibilityLabel("添加录音")
     }
 
     private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
@@ -519,6 +481,9 @@ private struct IconPressButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? 0.9 : 1)
             .opacity(isEnabled ? (configuration.isPressed ? 0.68 : 0.9) : 0.35)
+            .overlay(
+                GlowPressOverlay(shape: .rounded(10), isPressed: configuration.isPressed)
+            )
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
@@ -532,6 +497,9 @@ private struct ControlPressButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? 0.88 : 1)
             .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 0.92) : 0.35)
+            .overlay(
+                GlowPressOverlay(shape: .rounded(12), isPressed: configuration.isPressed)
+            )
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
@@ -540,6 +508,9 @@ private struct PlayPressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .overlay(
+                GlowPressOverlay(shape: .circle, isPressed: configuration.isPressed)
+            )
             .shadow(color: .black.opacity(configuration.isPressed ? 0.12 : 0.24), radius: 18, y: 10)
             .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
     }
@@ -550,6 +521,9 @@ private struct ScalePressButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
             .opacity(configuration.isPressed ? 0.72 : 1)
+            .overlay(
+                GlowPressOverlay(shape: .rounded(12), isPressed: configuration.isPressed)
+            )
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
@@ -565,6 +539,9 @@ private struct FilledCapsuleButtonStyle: ButtonStyle {
             .background(theme.accent.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
             .foregroundStyle(.white)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .overlay(
+                GlowPressOverlay(shape: .capsule, isPressed: configuration.isPressed)
+            )
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
@@ -584,6 +561,9 @@ private struct SecondaryCapsuleButtonStyle: ButtonStyle {
             )
             .foregroundStyle(theme.primaryText)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .overlay(
+                GlowPressOverlay(shape: .capsule, isPressed: configuration.isPressed)
+            )
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
