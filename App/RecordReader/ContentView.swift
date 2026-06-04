@@ -20,13 +20,10 @@ struct ContentView: View {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
-                VStack(spacing: 20) {
+                VStack(spacing: 0) {
                     header
 
-                    if let statusMessage = library.statusMessage {
-                        statusCapsule(statusMessage)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+                    statusRow
 
                     if let recording = library.selectedRecording {
                         playerContent(
@@ -36,12 +33,19 @@ struct ContentView: View {
                     } else {
                         emptyState
                     }
-
-                    Spacer(minLength: 12)
                 }
+                .frame(maxWidth: 430, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(theme.screenSurface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(theme.cardStroke, lineWidth: 1)
+                )
+                .shadow(color: theme.cardShadow, radius: 18, y: 8)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
-                .frame(maxWidth: 430, maxHeight: .infinity)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeOut(duration: 0.2), value: library.statusMessage)
                 .animation(.easeOut(duration: 0.22), value: library.selectedRecording?.id)
@@ -101,27 +105,22 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("RecordReader")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(theme.primaryText)
-                Text(library.currentFilterTitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(theme.mutedText)
-            }
+        HStack(spacing: 18) {
+            Image("AppMascot")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 38, height: 38)
+                .clipShape(Circle())
+                .accessibilityHidden(true)
 
             Spacer(minLength: 12)
 
-            if library.selectedRecording != nil {
-                importMenu
-            }
+            importMenu
 
             Button {
                 isLibraryPresented = true
             } label: {
                 Image(systemName: "list.bullet")
-                    .font(.title2.weight(.semibold))
             }
             .accessibilityLabel("显示录音列表")
 
@@ -129,10 +128,15 @@ struct ContentView: View {
                 isSettingsPresented = true
             } label: {
                 Image(systemName: "gearshape")
-                    .font(.title2.weight(.semibold))
             }
             .accessibilityLabel("设置")
         }
+        .font(.title2.weight(.semibold))
+        .foregroundStyle(theme.secondaryText)
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 24)
+        .background(theme.headerBackground)
         .buttonStyle(IconPressButtonStyle())
     }
 
@@ -151,24 +155,22 @@ struct ContentView: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
         }
         .accessibilityLabel("导入录音")
     }
 
-    private func statusCapsule(_ message: String) -> some View {
-        Label(message, systemImage: statusIcon(for: message))
+    private var statusRow: some View {
+        Label(statusMessage, systemImage: statusIcon(for: statusMessage))
             .font(.footnote.weight(.semibold))
             .foregroundStyle(theme.secondaryText)
             .lineLimit(2)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(theme.subtleFill, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(theme.cardStroke, lineWidth: 1)
-            )
+            .padding(.horizontal, 44)
+            .padding(.vertical, 20)
+    }
+
+    private var statusMessage: String {
+        library.statusMessage ?? "扫描到 \(library.recordings.count) 段录音"
     }
 
     private func statusIcon(for message: String) -> String {
@@ -182,7 +184,7 @@ struct ContentView: View {
     }
 
     private func playerContent(_ recording: Recording, subtitlePanelHeight: CGFloat) -> some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
             SubtitlePanel(
                 recording: recording,
                 currentTime: player.currentTime,
@@ -196,46 +198,64 @@ struct ContentView: View {
                 .frame(height: subtitlePanelHeight)
                 .id(recording.id)
 
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(recording.title)
-                            .font(.title2.weight(.bold))
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.75)
+            Spacer(minLength: 8)
 
-                        Text(recording.category ?? "未分类")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(theme.secondaryText)
-                    }
+            playerCard(recording)
 
-                    Spacer()
+            if let playbackError = player.errorMessage {
+                Text(playbackError)
+                    .font(.footnote)
+                    .foregroundStyle(.red.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+            }
+        }
+    }
 
-                    Button {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            library.toggleFavorite()
-                        }
-                    } label: {
-                        Image(systemName: recording.isFavorite ? "heart.fill" : "heart")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(recording.isFavorite ? theme.accent : theme.secondaryText)
-                    }
-                    .buttonStyle(IconPressButtonStyle())
-                    .accessibilityLabel(recording.isFavorite ? "取消收藏" : "收藏录音")
+    private func playerCard(_ recording: Recording) -> some View {
+        VStack(spacing: 20) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(recording.title)
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
 
-                    Menu {
-                        Button("编辑分类") {
-                            pendingCategory = recording.category ?? ""
-                            isCategoryEditorPresented = true
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.title2.weight(.bold))
-                    }
-                    .buttonStyle(IconPressButtonStyle())
-                    .accessibilityLabel("更多操作")
+                    Text(recording.category ?? "未分类")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.secondaryText)
                 }
 
+                Spacer()
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        library.toggleFavorite()
+                    }
+                } label: {
+                    Image(systemName: recording.isFavorite ? "heart.fill" : "heart")
+                        .font(.title.weight(.semibold))
+                        .foregroundStyle(recording.isFavorite ? theme.accent : theme.secondaryText)
+                }
+                .buttonStyle(IconPressButtonStyle())
+                .accessibilityLabel(recording.isFavorite ? "取消收藏" : "收藏录音")
+
+                Menu {
+                    Button("编辑分类") {
+                        pendingCategory = recording.category ?? ""
+                        isCategoryEditorPresented = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(theme.secondaryText)
+                }
+                .buttonStyle(IconPressButtonStyle())
+                .accessibilityLabel("更多操作")
+            }
+
+            VStack(spacing: 8) {
                 Slider(
                     value: seekProgressBinding,
                     in: 0...1,
@@ -257,106 +277,169 @@ struct ContentView: View {
                     } label: {
                         Text(player.speed.label)
                             .font(.caption.weight(.semibold).monospacedDigit())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(theme.subtleFill)
-                            .foregroundStyle(theme.primaryText)
-                            .clipShape(Capsule())
+                            .foregroundStyle(theme.secondaryText)
                     }
                     .buttonStyle(ScalePressButtonStyle())
                     .accessibilityLabel("播放速度 \(player.speed.label)")
                     Spacer()
                     Text(player.durationLabel)
                 }
-                .font(.caption.monospacedDigit())
+                .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(theme.secondaryText)
             }
-            .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(theme.elevatedCard)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(theme.cardStroke, lineWidth: 1)
-            )
-            .shadow(color: theme.cardShadow, radius: 18, y: 10)
 
-            HStack(spacing: 24) {
-                Button {
-                    let wasPlaying = player.isPlaying
-                    var previous: Recording?
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        previous = library.selectPrevious()
-                    }
-                    if let previous {
-                        player.load(url: previous.url)
-                        if wasPlaying {
-                            player.play()
-                        }
-                    }
-                } label: {
-                    Image(systemName: "backward.end.fill")
-                }
-                .disabled(!library.hasPreviousRecording)
-                .opacity(library.hasPreviousRecording ? 1 : 0.35)
-                .accessibilityLabel("上一首")
+            playbackControls
 
-                Button {
-                    player.seek(by: -15)
-                } label: {
-                    Image(systemName: "gobackward.15")
-                }
+            bottomNavigation
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(theme.elevatedCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(theme.cardStroke, lineWidth: 1)
+        )
+    }
 
-                Button {
-                    player.playPause()
-                } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(theme.controlForeground)
-                        .frame(width: 74, height: 74)
-                        .background(theme.controlFill)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(PlayPressButtonStyle())
-                .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+    private var playbackControls: some View {
+        HStack(spacing: 25) {
+            previousButton
 
-                Button {
-                    player.seek(by: 15)
-                } label: {
-                    Image(systemName: "goforward.15")
-                }
-
-                Button {
-                    let wasPlaying = player.isPlaying
-                    var next: Recording?
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        next = library.selectNext()
-                    }
-                    if let next {
-                        player.load(url: next.url)
-                        if wasPlaying {
-                            player.play()
-                        }
-                    }
-                } label: {
-                    Image(systemName: "forward.end.fill")
-                }
-                .disabled(!library.hasNextRecording)
-                .opacity(library.hasNextRecording ? 1 : 0.35)
-                .accessibilityLabel("下一首")
+            Button {
+                player.seek(by: -10)
+            } label: {
+                Image(systemName: "gobackward.10")
             }
-            .font(.title.weight(.semibold))
-            .buttonStyle(ControlPressButtonStyle())
+            .accessibilityLabel("后退 10 秒")
 
-            if let playbackError = player.errorMessage {
-                Text(playbackError)
-                    .font(.footnote)
-                    .foregroundStyle(.red.opacity(0.9))
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
+            Button {
+                player.playPause()
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(theme.controlForeground)
+                    .frame(width: 64, height: 64)
+                    .background(theme.controlFill)
+                    .clipShape(Circle())
+                    .shadow(color: theme.cardShadow, radius: 18, y: 8)
+            }
+            .buttonStyle(PlayPressButtonStyle())
+            .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+
+            Button {
+                player.seek(by: 10)
+            } label: {
+                Image(systemName: "goforward.10")
+            }
+            .accessibilityLabel("前进 10 秒")
+
+            nextButton
+        }
+        .font(.title2.weight(.semibold))
+        .foregroundStyle(theme.secondaryText)
+        .buttonStyle(ControlPressButtonStyle())
+    }
+
+    private var previousButton: some View {
+        Button {
+            let wasPlaying = player.isPlaying
+            var previous: Recording?
+            withAnimation(.easeOut(duration: 0.2)) {
+                previous = library.selectPrevious()
+            }
+            if let previous {
+                player.load(url: previous.url)
+                if wasPlaying {
+                    player.play()
+                }
+            }
+        } label: {
+            Image(systemName: "backward.end.fill")
+        }
+        .disabled(!library.hasPreviousRecording)
+        .opacity(library.hasPreviousRecording ? 1 : 0.18)
+        .accessibilityLabel("上一首")
+    }
+
+    private var nextButton: some View {
+        Button {
+            let wasPlaying = player.isPlaying
+            var next: Recording?
+            withAnimation(.easeOut(duration: 0.2)) {
+                next = library.selectNext()
+            }
+            if let next {
+                player.load(url: next.url)
+                if wasPlaying {
+                    player.play()
+                }
+            }
+        } label: {
+            Image(systemName: "forward.end.fill")
+        }
+        .disabled(!library.hasNextRecording)
+        .opacity(library.hasNextRecording ? 1 : 0.18)
+        .accessibilityLabel("下一首")
+    }
+
+    private var bottomNavigation: some View {
+        HStack {
+            bottomNavigationItem(
+                title: "Library",
+                systemImage: "rectangle.stack.fill",
+                isSelected: library.filter == .all
+            ) {
+                library.setFilter(.all)
+                isLibraryPresented = true
+            }
+
+            Spacer()
+
+            bottomNavigationItem(title: "Record", systemImage: "mic.fill", isSelected: false) {
+                presentImporter(.audio)
+            }
+
+            Spacer()
+
+            bottomNavigationItem(
+                title: "Favorites",
+                systemImage: library.filter == .favorites ? "star.fill" : "star",
+                isSelected: library.filter == .favorites
+            ) {
+                library.setFilter(.favorites)
+                isLibraryPresented = true
+            }
+
+            Spacer()
+
+            bottomNavigationItem(title: "Folders", systemImage: "folder", isSelected: false) {
+                presentImporter(.folder)
             }
         }
+        .padding(.top, 2)
+    }
+
+    private func bottomNavigationItem(
+        title: String,
+        systemImage: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+                Text(title)
+                    .font(.caption2.weight(.bold))
+            }
+            .frame(width: 66)
+            .foregroundStyle(isSelected ? theme.accent : theme.mutedText)
+        }
+        .buttonStyle(ScalePressButtonStyle())
     }
 
     private var emptyState: some View {
@@ -384,27 +467,15 @@ struct ContentView: View {
                     .foregroundStyle(.red.opacity(0.9))
                     .multilineTextAlignment(.center)
             }
-            HStack(spacing: 12) {
-                Button {
-                    presentImporter(.folder)
-                } label: {
-                    Label("选择文件夹", systemImage: "folder.badge.plus")
-                }
-                .buttonStyle(FilledCapsuleButtonStyle())
-
-                Button {
-                    presentImporter(.audio)
-                } label: {
-                    Label("选择音频", systemImage: "waveform.badge.plus")
-                }
-                .buttonStyle(SecondaryCapsuleButtonStyle())
-            }
             Spacer()
+            bottomNavigation
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
         }
     }
 
     private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
-        min(max(availableHeight * 0.42, 260), 430)
+        min(max(availableHeight * 0.48, 300), 520)
     }
 
     private func presentImporter(_ mode: ImportMode) {

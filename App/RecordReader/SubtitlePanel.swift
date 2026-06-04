@@ -11,16 +11,25 @@ struct SubtitlePanel: View {
     @Environment(\.appTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Label(statusTitle, systemImage: statusIcon)
-                    .font(.headline.weight(.semibold))
+                    .font(.title2.weight(.bold))
                     .foregroundStyle(statusColor)
                 Spacer()
                 Text(recording.fileExtension.uppercased())
-                    .font(.caption.monospaced())
-                    .foregroundStyle(theme.mutedText)
+                    .font(.caption.weight(.semibold).monospaced())
+                    .foregroundStyle(theme.secondaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 8))
             }
+
+            Rectangle()
+                .fill(theme.cardStroke.opacity(0.62))
+                .frame(height: 1)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
 
             if let subtitle = recording.subtitle, !subtitle.segments.isEmpty {
                 Picker("字幕显示", selection: $displayMode) {
@@ -33,7 +42,7 @@ struct SubtitlePanel: View {
                 subtitleList(subtitle.segments)
             } else {
                 Spacer()
-                VStack(spacing: 12) {
+                VStack(spacing: 18) {
                     if status == .recognizing {
                         recognitionProgressView
                     }
@@ -53,10 +62,9 @@ struct SubtitlePanel: View {
                         Button {
                             onRecognize()
                         } label: {
-                            Label(recognitionActionTitle, systemImage: "waveform.badge.magnifyingglass")
+                            Label(recognitionActionTitle, systemImage: "sparkles")
                         }
                         .buttonStyle(SubtitleActionButtonStyle())
-                        .padding(.top, 4)
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -71,15 +79,8 @@ struct SubtitlePanel: View {
                     .transition(.opacity)
             }
         }
-        .padding(22)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(theme.card)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(status == .failed ? statusColor.opacity(0.34) : theme.cardStroke, lineWidth: 1)
-        )
+        .padding(.horizontal, 44)
+        .padding(.vertical, 22)
         .animation(.easeOut(duration: 0.22), value: status)
         .animation(.easeOut(duration: 0.22), value: recording.subtitle?.segments.count ?? 0)
     }
@@ -188,7 +189,7 @@ struct SubtitlePanel: View {
     private var statusColor: Color {
         switch status {
         case .notStarted:
-            return theme.secondaryText
+            return theme.primaryText
         case .recognizing:
             return theme.accent
         case .ready:
@@ -273,10 +274,11 @@ private struct SubtitleActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout.weight(.semibold))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(theme.accent.opacity(configuration.isPressed ? 0.78 : 1), in: Capsule())
-            .foregroundStyle(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 13)
+            .background(Color.white.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
+            .foregroundStyle(theme.primaryText)
+            .shadow(color: theme.accent.opacity(configuration.isPressed ? 0.08 : 0.18), radius: 18, y: 9)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
