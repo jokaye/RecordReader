@@ -2,7 +2,7 @@ name: iOS
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/UI-upgrade-build]
   pull_request:
     branches: [main]
   workflow_dispatch:
