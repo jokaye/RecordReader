@@ -35,17 +35,7 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: 430, maxHeight: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(theme.screenSurface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(theme.cardStroke, lineWidth: 1)
-                )
-                .shadow(color: theme.cardShadow, radius: 18, y: 8)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .background(theme.screenSurface)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeOut(duration: 0.2), value: library.statusMessage)
                 .animation(.easeOut(duration: 0.22), value: library.selectedRecording?.id)
