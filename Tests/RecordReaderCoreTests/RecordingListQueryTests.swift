@@ -47,6 +47,38 @@ final class RecordingListQueryTests: XCTestCase {
         XCTAssertEqual(RecordingListQuery.visibleRecordings(recordings, filter: .all, searchText: "", sort: .fileExtension).map(\.id), ["c", "b", "a"])
     }
 
+    func testVisibleRecordingsFiltersRecentRecordingsByModifiedOrCreatedDate() {
+        let recordings = [
+            makeRecording(id: "new", title: "New", createdAt: Date(timeIntervalSince1970: 90), modifiedAt: Date(timeIntervalSince1970: 100)),
+            makeRecording(id: "imported", title: "Imported", createdAt: Date(timeIntervalSince1970: 95), modifiedAt: nil),
+            makeRecording(id: "old", title: "Old", createdAt: Date(timeIntervalSince1970: 10), modifiedAt: Date(timeIntervalSince1970: 20)),
+            makeRecording(id: "unknown", title: "Unknown", createdAt: nil, modifiedAt: nil)
+        ]
+
+        XCTAssertEqual(
+            RecordingListQuery.visibleRecordings(recordings, filter: .all, searchText: "", sort: .modifiedNewest, quickFilter: .recent).map(\.id),
+            ["new", "imported"]
+        )
+    }
+
+    func testVisibleRecordingsFiltersBySubtitleAvailability() {
+        let recordings = [
+            makeRecording(id: "ready", title: "Ready", subtitle: SubtitleDocument(status: .ready, segments: [], errorMessage: nil)),
+            makeRecording(id: "missing", title: "Missing", subtitle: nil),
+            makeRecording(id: "failed", title: "Failed", subtitle: SubtitleDocument(status: .failed, segments: [], errorMessage: "识别失败")),
+            makeRecording(id: "recognizing", title: "Recognizing", subtitle: SubtitleDocument(status: .recognizing, segments: [], errorMessage: nil))
+        ]
+
+        XCTAssertEqual(
+            RecordingListQuery.visibleRecordings(recordings, filter: .all, searchText: "", sort: .nameAscending, quickFilter: .withSubtitles).map(\.id),
+            ["ready"]
+        )
+        XCTAssertEqual(
+            RecordingListQuery.visibleRecordings(recordings, filter: .all, searchText: "", sort: .nameAscending, quickFilter: .withoutSubtitles).map(\.id),
+            ["failed", "missing", "recognizing"]
+        )
+    }
+
     func testQueueNavigationFindsPreviousAndNextInsideVisibleRecordings() {
         let recordings = [
             makeRecording(id: "a", title: "A"),
@@ -113,9 +145,11 @@ final class RecordingListQueryTests: XCTestCase {
         title: String,
         fileExtension: String = "m4a",
         fileSize: Int64? = nil,
+        createdAt: Date? = nil,
         modifiedAt: Date? = nil,
         isFavorite: Bool = false,
-        category: String? = nil
+        category: String? = nil,
+        subtitle: SubtitleDocument? = nil
     ) -> Recording {
         Recording(
             id: id,
@@ -123,11 +157,11 @@ final class RecordingListQueryTests: XCTestCase {
             title: title,
             fileExtension: fileExtension,
             fileSize: fileSize,
-            createdAt: nil,
+            createdAt: createdAt,
             modifiedAt: modifiedAt,
             isFavorite: isFavorite,
             category: category,
-            subtitle: nil
+            subtitle: subtitle
         )
     }
 }

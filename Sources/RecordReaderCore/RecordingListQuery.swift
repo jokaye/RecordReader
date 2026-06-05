@@ -6,6 +6,12 @@ public enum RecordingFilter: Hashable {
     case category(String)
 }
 
+public enum RecordingQuickFilter: Hashable {
+    case recent
+    case withoutSubtitles
+    case withSubtitles
+}
+
 public enum RecordingSort: String, CaseIterable, Codable, Equatable {
     case nameAscending
     case modifiedNewest
@@ -34,13 +40,15 @@ public enum RecordingListQuery {
         _ recordings: [Recording],
         filter: RecordingFilter,
         searchText: String,
-        sort: RecordingSort
+        sort: RecordingSort,
+        quickFilter: RecordingQuickFilter? = nil
     ) -> [Recording] {
         let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let filtered = recordings.filter { recording in
+        let filteredByLibraryState = recordings.filter { recording in
             matches(filter: filter, recording: recording)
                 && matches(searchText: normalizedSearchText, recording: recording)
         }
+        let filtered = apply(quickFilter: quickFilter, to: filteredByLibraryState)
         return sortRecordings(filtered, by: sort)
     }
 
@@ -102,6 +110,42 @@ public enum RecordingListQuery {
         case .category(let category):
             return recording.category == category
         }
+    }
+
+    private static func apply(quickFilter: RecordingQuickFilter?, to recordings: [Recording]) -> [Recording] {
+        guard let quickFilter else {
+            return recordings
+        }
+
+        switch quickFilter {
+        case .recent:
+            guard let threshold = recentDateThreshold(for: recordings) else {
+                return []
+            }
+            return recordings.filter { recording in
+                guard let date = displayDate(for: recording) else {
+                    return false
+                }
+                return date >= threshold
+            }
+        case .withoutSubtitles:
+            return recordings.filter { !hasGeneratedSubtitles($0) }
+        case .withSubtitles:
+            return recordings.filter(hasGeneratedSubtitles)
+        }
+    }
+
+    private static func recentDateThreshold(for recordings: [Recording]) -> Date? {
+        let newestDate = recordings.compactMap(displayDate).max()
+        return newestDate?.addingTimeInterval(-7 * 24 * 60 * 60)
+    }
+
+    private static func displayDate(for recording: Recording) -> Date? {
+        recording.modifiedAt ?? recording.createdAt
+    }
+
+    private static func hasGeneratedSubtitles(_ recording: Recording) -> Bool {
+        recording.subtitle?.status == .ready
     }
 
     private static func matches(searchText: String, recording: Recording) -> Bool {

@@ -32,7 +32,8 @@ struct NeonLoadingIndicator: View {
                         colors: [
                             theme.accent,
                             Color(red: 0.98, green: 0.72, blue: 0.20),
-                            Color(red: 0.20, green: 0.70, blue: 0.95),
+                            Color(red: 1.0, green: 0.48, blue: 0.18),
+                            Color(red: 1.0, green: 0.84, blue: 0.54),
                             theme.accent
                         ],
                         center: .center
@@ -74,6 +75,7 @@ struct GlowPressOverlay: View {
     let shape: GlowPressShape
     let isPressed: Bool
     @Environment(\.appTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -82,8 +84,8 @@ struct GlowPressOverlay: View {
             PressSheenOverlay(shape: shape, isActive: isPressed)
         }
         .allowsHitTesting(false)
-        .opacity(isPressed ? 1 : 0.18)
-        .animation(.easeOut(duration: 0.16), value: isPressed)
+        .opacity(isPressed ? 0.82 : 0.08)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPressed)
     }
 
     @ViewBuilder
@@ -91,13 +93,13 @@ struct GlowPressOverlay: View {
         switch shape {
         case .rounded(let radius):
             RoundedRectangle(cornerRadius: radius)
-                .fill(theme.accent.opacity(isPressed ? 0.08 : 0.03))
+                .fill(theme.softAccent.opacity(isPressed ? 0.12 : 0.02))
         case .circle:
             Circle()
-                .fill(theme.accent.opacity(isPressed ? 0.10 : 0.03))
+                .fill(theme.softAccent.opacity(isPressed ? 0.14 : 0.02))
         case .capsule:
             Capsule()
-                .fill(theme.accent.opacity(isPressed ? 0.08 : 0.03))
+                .fill(theme.softAccent.opacity(isPressed ? 0.12 : 0.02))
         }
     }
 
@@ -105,9 +107,9 @@ struct GlowPressOverlay: View {
     private var glowStroke: some View {
         let gradient = LinearGradient(
             colors: [
-                theme.accent.opacity(isPressed ? 0.95 : 0.38),
-                Color(red: 0.20, green: 0.70, blue: 0.95).opacity(isPressed ? 0.78 : 0.28),
-                Color.white.opacity(isPressed ? 0.80 : 0.22)
+                theme.accent.opacity(isPressed ? 0.72 : 0.20),
+                Color(red: 0.96, green: 0.55, blue: 0.20).opacity(isPressed ? 0.56 : 0.14),
+                Color(red: 1.0, green: 0.84, blue: 0.62).opacity(isPressed ? 0.42 : 0.10)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -116,16 +118,16 @@ struct GlowPressOverlay: View {
         switch shape {
         case .rounded(let radius):
             RoundedRectangle(cornerRadius: radius)
-                .stroke(gradient, lineWidth: isPressed ? 1.4 : 0.8)
-                .shadow(color: theme.accent.opacity(isPressed ? 0.24 : 0.10), radius: isPressed ? 12 : 5)
+                .stroke(gradient, lineWidth: isPressed ? 1.1 : 0.6)
+                .shadow(color: theme.accent.opacity(isPressed ? 0.14 : 0.04), radius: isPressed ? 8 : 3)
         case .circle:
             Circle()
-                .stroke(gradient, lineWidth: isPressed ? 1.5 : 0.9)
-                .shadow(color: theme.accent.opacity(isPressed ? 0.28 : 0.10), radius: isPressed ? 14 : 6)
+                .stroke(gradient, lineWidth: isPressed ? 1.2 : 0.7)
+                .shadow(color: theme.accent.opacity(isPressed ? 0.16 : 0.04), radius: isPressed ? 9 : 3)
         case .capsule:
             Capsule()
-                .stroke(gradient, lineWidth: isPressed ? 1.4 : 0.8)
-                .shadow(color: theme.accent.opacity(isPressed ? 0.24 : 0.10), radius: isPressed ? 12 : 5)
+                .stroke(gradient, lineWidth: isPressed ? 1.1 : 0.6)
+                .shadow(color: theme.accent.opacity(isPressed ? 0.14 : 0.04), radius: isPressed ? 8 : 3)
         }
     }
 }
@@ -141,17 +143,17 @@ private struct PressSheenOverlay: View {
                 .frame(width: max(proxy.size.width * 0.48, 24), height: proxy.size.height * 1.8)
                 .rotationEffect(.degrees(24))
                 .offset(x: isActive && !reduceMotion ? proxy.size.width * 0.72 : -proxy.size.width * 0.82)
-                .animation(.easeOut(duration: 0.22), value: isActive)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: isActive)
         }
         .clipShape(clipShape)
-        .opacity(isActive ? 1 : 0)
+        .opacity(isActive && !reduceMotion ? 0.72 : 0)
     }
 
     private var sheen: some View {
         LinearGradient(
             colors: [
                 Color.white.opacity(0),
-                Color.white.opacity(0.28),
+                Color.white.opacity(0.18),
                 Color.white.opacity(0)
             ],
             startPoint: .leading,
