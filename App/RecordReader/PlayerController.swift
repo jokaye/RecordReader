@@ -134,6 +134,14 @@ final class PlayerController: NSObject, ObservableObject, AVAudioPlayerDelegate 
         currentTime = player.currentTime
     }
 
+    func seek(to time: TimeInterval) {
+        guard let player else {
+            return
+        }
+        player.currentTime = min(max(time, 0), player.duration)
+        currentTime = player.currentTime
+    }
+
     func seek(toProgress progress: Double) {
         guard let player, player.duration > 0 else {
             return

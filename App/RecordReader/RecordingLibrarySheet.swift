@@ -1,3 +1,4 @@
+import AVFoundation
 import RecordReaderCore
 import SwiftUI
 
@@ -11,6 +12,15 @@ struct RecordingLibrarySheet: View {
     @State private var batchCategory = ""
     @State private var pendingDeleteIDs: Set<Recording.ID> = []
     @State private var isDeleteConfirmationPresented = false
+    @State private var quickFilter: RecordingQuickFilter?
+    @State private var durationByID: [Recording.ID: TimeInterval] = [:]
+
+    private static let rowDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter
+    }()
 
     var body: some View {
         NavigationStack {
@@ -22,7 +32,7 @@ struct RecordingLibrarySheet: View {
                 }
 
                 Section {
-                    ForEach(library.visibleRecordings) { recording in
+                    ForEach(displayedRecordings) { recording in
                         recordingRow(recording)
                             .listRowBackground(rowBackground(for: recording))
                             .listRowSeparator(.hidden)
@@ -35,7 +45,7 @@ struct RecordingLibrarySheet: View {
                             }
                     }
                 } header: {
-                    Text(library.currentFilterTitle)
+                    Text(currentListTitle)
                 }
             }
             .navigationTitle("录音")
@@ -114,8 +124,26 @@ struct RecordingLibrarySheet: View {
             }
             .animation(.easeOut(duration: 0.18), value: isBatchMode)
             .animation(.easeOut(duration: 0.18), value: selectedIDs)
+            .animation(.easeOut(duration: 0.18), value: quickFilter)
         }
         .preferredColorScheme(theme.mode.colorScheme)
+    }
+
+    private var displayedRecordings: [Recording] {
+        RecordingListQuery.visibleRecordings(
+            library.visibleRecordings,
+            filter: .all,
+            searchText: "",
+            sort: library.sort,
+            quickFilter: quickFilter
+        )
+    }
+
+    private var currentListTitle: String {
+        guard let quickFilter else {
+            return library.currentFilterTitle
+        }
+        return "\(library.currentFilterTitle) · \(quickFilterTitle(quickFilter))"
     }
 
     private var filterStrip: some View {
@@ -123,6 +151,9 @@ struct RecordingLibrarySheet: View {
             HStack(spacing: 10) {
                 filterChip(.all, title: "全部", systemImage: "tray.full")
                 filterChip(.favorites, title: "收藏", systemImage: "heart")
+                quickFilterChip(.recent, title: "最近", systemImage: "clock")
+                quickFilterChip(.withoutSubtitles, title: "未生成字幕", systemImage: "text.bubble")
+                quickFilterChip(.withSubtitles, title: "已生成字幕", systemImage: "text.bubble.fill")
                 ForEach(library.categories, id: \.self) { category in
                     filterChip(.category(category), title: category, systemImage: "tag")
                 }
@@ -163,6 +194,15 @@ struct RecordingLibrarySheet: View {
                     Text(recording.category ?? "未分类")
                         .font(.caption)
                         .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(rowMetadataText(for: recording))
+                            .foregroundStyle(theme.mutedText)
+                        Label(subtitleStatusTitle(for: recording), systemImage: subtitleStatusImage(for: recording))
+                            .foregroundStyle(subtitleStatusColor(for: recording))
+                    }
+                    .font(.caption2)
+                    .lineLimit(1)
                 }
 
                 Spacer()
@@ -176,6 +216,9 @@ struct RecordingLibrarySheet: View {
             }
             .padding(.vertical, 8)
             .contentShape(Rectangle())
+        }
+        .task(id: recording.id) {
+            await loadDurationIfNeeded(for: recording)
         }
     }
 
@@ -239,6 +282,25 @@ struct RecordingLibrarySheet: View {
         Button {
             withAnimation(.easeOut(duration: 0.18)) {
                 library.setFilter(filter)
+                quickFilter = nil
+                selectedIDs = []
+            }
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(chipBackground(for: filter), in: Capsule())
+                .foregroundStyle(chipForeground(for: filter))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func quickFilterChip(_ filter: RecordingQuickFilter, title: String, systemImage: String) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.18)) {
+                quickFilter = quickFilter == filter ? nil : filter
                 selectedIDs = []
             }
         } label: {
@@ -274,6 +336,112 @@ struct RecordingLibrarySheet: View {
 
     private func chipForeground(for filter: RecordingFilter) -> Color {
         library.filter == filter ? Color.white : theme.secondaryText
+    }
+
+    private func chipBackground(for filter: RecordingQuickFilter) -> Color {
+        quickFilter == filter ? theme.accent : theme.elevatedCard
+    }
+
+    private func chipForeground(for filter: RecordingQuickFilter) -> Color {
+        quickFilter == filter ? Color.white : theme.secondaryText
+    }
+
+    private func rowMetadataText(for recording: Recording) -> String {
+        [durationText(for: recording), dateText(for: recording)]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    private func durationText(for recording: Recording) -> String? {
+        guard let duration = durationByID[recording.id], duration > 0 else {
+            return "时长 --"
+        }
+        return formatDuration(duration)
+    }
+
+    private func dateText(for recording: Recording) -> String? {
+        if let modifiedAt = recording.modifiedAt {
+            return "修改 \(Self.rowDateFormatter.string(from: modifiedAt))"
+        }
+        if let createdAt = recording.createdAt {
+            return "导入 \(Self.rowDateFormatter.string(from: createdAt))"
+        }
+        return nil
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func subtitleStatusTitle(for recording: Recording) -> String {
+        switch recording.subtitle?.status {
+        case .ready:
+            return "已生成字幕"
+        case .recognizing:
+            return "字幕识别中"
+        case .failed:
+            return "字幕失败"
+        case .notStarted, .none:
+            return "未生成字幕"
+        }
+    }
+
+    private func subtitleStatusImage(for recording: Recording) -> String {
+        switch recording.subtitle?.status {
+        case .ready:
+            return "checkmark.circle.fill"
+        case .recognizing:
+            return "clock"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        case .notStarted, .none:
+            return "text.bubble"
+        }
+    }
+
+    private func subtitleStatusColor(for recording: Recording) -> Color {
+        switch recording.subtitle?.status {
+        case .ready:
+            return theme.accent
+        case .recognizing:
+            return theme.secondaryText
+        case .failed:
+            return .red
+        case .notStarted, .none:
+            return theme.mutedText
+        }
+    }
+
+    private func quickFilterTitle(_ filter: RecordingQuickFilter) -> String {
+        switch filter {
+        case .recent:
+            return "最近"
+        case .withoutSubtitles:
+            return "未生成字幕"
+        case .withSubtitles:
+            return "已生成字幕"
+        }
+    }
+
+    @MainActor
+    private func loadDurationIfNeeded(for recording: Recording) async {
+        guard durationByID[recording.id] == nil else {
+            return
+        }
+        let asset = AVURLAsset(url: recording.url)
+        do {
+            let duration = try await asset.load(.duration).seconds
+            durationByID[recording.id] = duration.isFinite && duration > 0 ? duration : 0
+        } catch {
+            durationByID[recording.id] = 0
+        }
     }
 
     private func toggleSelection(_ id: Recording.ID) {

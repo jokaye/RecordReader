@@ -7,8 +7,29 @@ struct SubtitlePanel: View {
     @Binding var displayMode: SubtitleDisplayMode
     let errorMessage: String?
     let recognitionProgress: SubtitleRecognitionProgress?
+    let onSeekToSubtitle: (TimeInterval) -> Void
     let onRecognize: () -> Void
+    @State private var searchText = ""
+    @State private var showsReRecognitionConfirmation = false
     @Environment(\.appTheme) private var theme
+
+    init(
+        recording: Recording,
+        currentTime: TimeInterval,
+        displayMode: Binding<SubtitleDisplayMode>,
+        errorMessage: String?,
+        recognitionProgress: SubtitleRecognitionProgress?,
+        onSeekToSubtitle: @escaping (TimeInterval) -> Void = { _ in },
+        onRecognize: @escaping () -> Void
+    ) {
+        self.recording = recording
+        self.currentTime = currentTime
+        self._displayMode = displayMode
+        self.errorMessage = errorMessage
+        self.recognitionProgress = recognitionProgress
+        self.onSeekToSubtitle = onSeekToSubtitle
+        self.onRecognize = onRecognize
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,12 +53,40 @@ struct SubtitlePanel: View {
                 .padding(.bottom, 14)
 
             if let subtitle = recording.subtitle, !subtitle.segments.isEmpty {
-                Picker("字幕显示", selection: $displayMode) {
-                    ForEach(SubtitleDisplayMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Picker("字幕显示", selection: $displayMode) {
+                            ForEach(SubtitleDisplayMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Button {
+                            showsReRecognitionConfirmation = true
+                        } label: {
+                            Label("重新识别", systemImage: "arrow.clockwise")
+                                .labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(theme.secondaryText)
+                        .padding(8)
+                        .background(theme.subtleFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+                        .accessibilityLabel("重新识别字幕")
                     }
+
+                    subtitleSearchField
                 }
-                .pickerStyle(.segmented)
+                .confirmationDialog(
+                    "重新识别会替换当前字幕。",
+                    isPresented: $showsReRecognitionConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("重新识别", role: .destructive) {
+                        onRecognize()
+                    }
+                    Button("取消", role: .cancel) {}
+                }
 
                 subtitleList(subtitle.segments)
             } else {
@@ -87,28 +136,48 @@ struct SubtitlePanel: View {
 
     private func subtitleList(_ segments: [SubtitleSegment]) -> some View {
         let activeSegmentID = SubtitleTimeline.activeSegment(in: segments, at: currentTime)?.id
+        let visibleSegments = filteredSegments(from: segments)
+        let searchIsActive = !normalizedSearchText.isEmpty
 
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(segments) { segment in
-                        subtitleRow(segment, isActive: segment.id == activeSegmentID)
-                            .id(segment.id)
+                    if visibleSegments.isEmpty {
+                        Text("未找到匹配字幕")
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(theme.mutedText)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 28)
+                    } else {
+                        ForEach(visibleSegments) { segment in
+                            subtitleRow(segment, isActive: segment.id == activeSegmentID)
+                                .id(segment.id)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onAppear {
+                guard !searchIsActive else {
+                    return
+                }
                 scrollToActiveSegment(activeSegmentID, proxy: proxy, animated: false)
             }
             .onChange(of: activeSegmentID) { _, nextID in
-                guard displayMode == .follow else {
+                guard displayMode == .follow, !searchIsActive else {
                     return
                 }
                 scrollToActiveSegment(nextID, proxy: proxy, animated: true)
             }
             .onChange(of: displayMode) { _, mode in
-                guard mode == .follow else {
+                guard mode == .follow, !searchIsActive else {
+                    return
+                }
+                scrollToActiveSegment(activeSegmentID, proxy: proxy, animated: true)
+            }
+            .onChange(of: normalizedSearchText) { _, nextSearchText in
+                guard nextSearchText.isEmpty else {
+                    scrollToFirstVisibleSegment(visibleSegments, proxy: proxy)
                     return
                 }
                 scrollToActiveSegment(activeSegmentID, proxy: proxy, animated: true)
@@ -117,25 +186,43 @@ struct SubtitlePanel: View {
     }
 
     private func subtitleRow(_ segment: SubtitleSegment, isActive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(timeRange(segment))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(isActive ? theme.secondaryText : theme.mutedText)
-            Text(segment.text)
-                .font(isActive ? .body.weight(.semibold) : .body.weight(.medium))
-                .foregroundStyle(isActive ? theme.primaryText : theme.secondaryText)
-                .lineSpacing(4)
+        Button {
+            onSeekToSubtitle(segment.startTime)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Capsule()
+                    .fill(isActive ? theme.accent : Color.clear)
+                    .frame(width: 3)
+                    .padding(.vertical, 3)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(timeRange(segment))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(isActive ? theme.accent : theme.mutedText)
+                    Text(segment.text)
+                        .font(isActive ? .body.weight(.semibold) : .body.weight(.medium))
+                        .foregroundStyle(isActive ? theme.primaryText : theme.secondaryText)
+                        .lineSpacing(4)
+                        .multilineTextAlignment(.leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(RoundedRectangle(cornerRadius: 8))
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isActive && displayMode == .follow ? theme.subtleFill : Color.clear)
+                .fill(activeRowFill(isActive: isActive))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isActive && displayMode == .follow ? theme.cardStroke : Color.clear, lineWidth: 1)
+                .stroke(isActive ? theme.cardStroke.opacity(0.88) : Color.clear, lineWidth: 1)
         )
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(timeRange(segment)) \(segment.text)")
+        .accessibilityHint("跳转到这句字幕")
         .transition(.opacity)
     }
 
@@ -153,6 +240,76 @@ struct SubtitlePanel: View {
             }
         } else {
             proxy.scrollTo(id, anchor: .center)
+        }
+    }
+
+    private var subtitleSearchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(theme.mutedText)
+
+            TextField("搜索字幕", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(theme.primaryText)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.mutedText)
+                .accessibilityLabel("清除字幕搜索")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(theme.subtleFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(theme.cardStroke.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private var normalizedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func filteredSegments(from segments: [SubtitleSegment]) -> [SubtitleSegment] {
+        let query = normalizedSearchText
+        guard !query.isEmpty else {
+            return segments
+        }
+        return segments.filter { segment in
+            segment.text.localizedCaseInsensitiveContains(query)
+                || timeRange(segment).localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private func scrollToFirstVisibleSegment(
+        _ segments: [SubtitleSegment],
+        proxy: ScrollViewProxy
+    ) {
+        guard let firstID = segments.first?.id else {
+            return
+        }
+        withAnimation(.easeOut(duration: 0.18)) {
+            proxy.scrollTo(firstID, anchor: .top)
+        }
+    }
+
+    private func activeRowFill(isActive: Bool) -> Color {
+        guard isActive else {
+            return Color.clear
+        }
+        switch displayMode {
+        case .follow:
+            return theme.softAccent.opacity(0.72)
+        case .all:
+            return theme.subtleFill.opacity(0.42)
         }
     }
 

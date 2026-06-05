@@ -23,12 +23,18 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     header
 
-                    statusRow
+                    if let transientStatusMessage {
+                        statusRow(transientStatusMessage)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
 
                     if let recording = library.selectedRecording {
                         playerContent(
                             recording,
-                            subtitlePanelHeight: subtitlePanelHeight(for: geometry.size.height)
+                            subtitlePanelHeight: subtitlePanelHeight(
+                                for: recording,
+                                availableHeight: geometry.size.height
+                            )
                         )
                     } else {
                         emptyState
@@ -37,7 +43,7 @@ struct ContentView: View {
                 .frame(maxWidth: 430, maxHeight: .infinity)
                 .background(theme.screenSurface)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.easeOut(duration: 0.2), value: library.statusMessage)
+                .animation(.easeOut(duration: 0.2), value: transientStatusMessage)
                 .animation(.easeOut(duration: 0.22), value: library.selectedRecording?.id)
             }
         }
@@ -151,22 +157,46 @@ struct ContentView: View {
         .accessibilityLabel("导入录音")
     }
 
-    private var statusRow: some View {
-        Label(statusMessage, systemImage: statusIcon(for: statusMessage))
+    private func statusRow(_ message: String) -> some View {
+        Label(message, systemImage: statusIcon(for: message))
             .font(.footnote.weight(.semibold))
             .foregroundStyle(theme.secondaryText)
             .lineLimit(2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 44)
-            .padding(.vertical, 20)
+            .padding(.vertical, 14)
+            .background(theme.screenSurface)
     }
 
-    private var statusMessage: String {
-        library.statusMessage ?? "扫描到 \(library.recordings.count) 段录音"
+    private var transientStatusMessage: String? {
+        if let errorMessage = library.errorMessage {
+            return errorMessage
+        }
+        if library.isLoading {
+            return library.statusMessage ?? "正在扫描录音..."
+        }
+        guard let statusMessage = library.statusMessage else {
+            return nil
+        }
+        if isTransientStatusMessage(statusMessage) {
+            return statusMessage
+        }
+        return nil
+    }
+
+    private func isTransientStatusMessage(_ message: String) -> Bool {
+        let transientMarkers = ["正在", "失败", "错误", "不可用", "未识别"]
+        return transientMarkers.contains { message.contains($0) }
     }
 
     private func statusIcon(for message: String) -> String {
-        if message.contains("失败") || message.contains("错误") || message.contains("不可用") {
+        if message.contains("失败")
+            || message.contains("错误")
+            || message.contains("不可用")
+            || message.contains("未识别")
+            || message.contains("无法")
+            || message.contains("没有")
+            || message.contains("请先") {
             return "exclamationmark.triangle"
         }
         if message.contains("识别") || message.contains("扫描") {
@@ -182,10 +212,14 @@ struct ContentView: View {
                 currentTime: player.currentTime,
                 displayMode: $subtitleDisplayMode,
                 errorMessage: library.errorMessage,
-                recognitionProgress: library.subtitleRecognitionProgress
-            ) {
-                library.recognizeSubtitleForSelectedRecording()
-            }
+                recognitionProgress: library.subtitleRecognitionProgress,
+                onSeekToSubtitle: { time in
+                    player.seek(to: time)
+                },
+                onRecognize: {
+                    library.recognizeSubtitleForSelectedRecording()
+                }
+            )
                 .frame(maxWidth: .infinity)
                 .frame(height: subtitlePanelHeight)
                 .id(recording.id)
@@ -300,11 +334,11 @@ struct ContentView: View {
             previousButton
 
             Button {
-                player.seek(by: -10)
+                player.seek(by: -15)
             } label: {
-                Image(systemName: "gobackward.10")
+                Image(systemName: "gobackward.15")
             }
-            .accessibilityLabel("后退 10 秒")
+            .accessibilityLabel("后退 15 秒")
 
             Button {
                 player.playPause()
@@ -321,11 +355,11 @@ struct ContentView: View {
             .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
 
             Button {
-                player.seek(by: 10)
+                player.seek(by: 15)
             } label: {
-                Image(systemName: "goforward.10")
+                Image(systemName: "goforward.15")
             }
-            .accessibilityLabel("前进 10 秒")
+            .accessibilityLabel("前进 15 秒")
 
             nextButton
         }
@@ -426,8 +460,21 @@ struct ContentView: View {
         .accessibilityLabel("添加录音")
     }
 
-    private func subtitlePanelHeight(for availableHeight: CGFloat) -> CGFloat {
-        min(max(availableHeight * 0.48, 300), 520)
+    private func subtitlePanelHeight(for recording: Recording, availableHeight: CGFloat) -> CGFloat {
+        if shouldExpandSubtitlePanel(for: recording) {
+            return min(max(availableHeight * 0.48, 300), 520)
+        }
+        return min(max(availableHeight * 0.28, 210), 300)
+    }
+
+    private func shouldExpandSubtitlePanel(for recording: Recording) -> Bool {
+        guard let subtitle = recording.subtitle else {
+            return false
+        }
+        if !subtitle.segments.isEmpty {
+            return true
+        }
+        return subtitle.status == .recognizing
     }
 
     private func presentImporter(_ mode: ImportMode) {
