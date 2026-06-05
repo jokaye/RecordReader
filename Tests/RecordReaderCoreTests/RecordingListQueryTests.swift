@@ -48,10 +48,13 @@ final class RecordingListQueryTests: XCTestCase {
     }
 
     func testVisibleRecordingsFiltersRecentRecordingsByModifiedOrCreatedDate() {
+        let newestDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let recentImportedDate = newestDate.addingTimeInterval(-2 * 24 * 60 * 60)
+        let oldDate = newestDate.addingTimeInterval(-8 * 24 * 60 * 60)
         let recordings = [
-            makeRecording(id: "new", title: "New", createdAt: Date(timeIntervalSince1970: 90), modifiedAt: Date(timeIntervalSince1970: 100)),
-            makeRecording(id: "imported", title: "Imported", createdAt: Date(timeIntervalSince1970: 95), modifiedAt: nil),
-            makeRecording(id: "old", title: "Old", createdAt: Date(timeIntervalSince1970: 10), modifiedAt: Date(timeIntervalSince1970: 20)),
+            makeRecording(id: "new", title: "New", createdAt: newestDate, modifiedAt: newestDate),
+            makeRecording(id: "imported", title: "Imported", createdAt: recentImportedDate, modifiedAt: nil),
+            makeRecording(id: "old", title: "Old", createdAt: oldDate, modifiedAt: oldDate),
             makeRecording(id: "unknown", title: "Unknown", createdAt: nil, modifiedAt: nil)
         ]
 
